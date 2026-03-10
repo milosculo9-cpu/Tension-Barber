@@ -405,6 +405,46 @@ export default function Home() {
         </section>
       )}
 
+      {/* ==================== CENOVNIK ==================== */}
+      <section className="py-20 px-4 bg-black">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-center text-xl md:text-2xl font-light tracking-[0.2em] mb-12">CENOVNIK</h2>
+          
+          <div className="space-y-0">
+            {[
+              { service: 'ŠIŠANJE "FEJD"', price: '1.200' },
+              { service: 'ŠIŠANJE DUŽA KOSA', price: '1.500' },
+              { service: 'ŠIŠANJE ZATVORSKI', price: '800' },
+              { service: 'BRIJANJE GLAVE BRITVOM', price: '800' },
+              { service: 'TRIMOVANJE I KONTURE BRADE', price: '600' },
+              { service: 'KONTURE BRADE', price: '350' },
+              { service: 'OBLIKOVANJE OBRVA KONCEM', price: '400' },
+              { service: 'OBLIKOVANJE OBRVA BRITVOM', price: '300' },
+              { service: 'PRANJE KOSE', price: '350' },
+              { service: 'VOSAK UŠI', price: '300' },
+              { service: 'VOSAK NOS', price: '300' },
+              { service: 'FARBANJE KOSE', price: '***' },
+              { service: 'FARBANJE BRADE', price: '***' },
+              { service: 'TENSION FULL PAKET', price: '3.000' },
+              { service: '"VANREDNO" ŠIŠANJE', price: '1.500' },
+              { service: 'TENSION ALL INCLUSIVE', price: '3.500' },
+            ].map((item, i) => (
+              <div 
+                key={i} 
+                className="flex justify-between items-center py-4 border-b border-zinc-800"
+              >
+                <span className="text-sm md:text-base text-gray-300">{item.service}</span>
+                <span className="text-sm md:text-base text-white font-medium">
+                  {item.price === '***' ? '***' : `${item.price} RSD`}
+                </span>
+              </div>
+            ))}
+          </div>
+          
+          <p className="text-center text-gray-600 text-xs mt-8">*** Cena po dogovoru</p>
+        </div>
+      </section>
+
       {/* ==================== O NAMA ==================== */}
       <section className="py-20 px-4 bg-zinc-950 border-t border-zinc-800">
         <div className="max-w-4xl mx-auto">
