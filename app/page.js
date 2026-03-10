@@ -90,6 +90,8 @@ export default function Home() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [form, setForm] = useState({ email: '', name: '', phone: '', birthday: '' })
+  const [showNavbar, setShowNavbar] = useState(true)
+  const [lastScrollY, setLastScrollY] = useState(0)
   
   const dates = generateDates()
 
@@ -100,6 +102,21 @@ export default function Home() {
     }, 3000)
     return () => clearInterval(timer)
   }, [])
+
+  // Hide navbar on scroll down, show on scroll up
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY
+      if (currentScrollY > lastScrollY && currentScrollY > 100) {
+        setShowNavbar(false)
+      } else {
+        setShowNavbar(true)
+      }
+      setLastScrollY(currentScrollY)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [lastScrollY])
 
   // Scroll to section
   const scrollToSection = (id) => {
@@ -159,12 +176,10 @@ export default function Home() {
     <main className="min-h-screen bg-black text-white">
       
       {/* ==================== NAVBAR ==================== */}
-      <nav className="fixed top-0 left-0 right-0 z-50">
-        <div className="bg-black py-4 px-6">
-          <p className="text-center text-sm md:text-base font-medium tracking-[0.3em]">TENSION BARBER</p>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ${showNavbar ? 'translate-y-0' : '-translate-y-full'}`}>
+        <div className="bg-gradient-to-b from-black via-black/80 to-transparent pt-5 pb-12 px-6">
+          <h1 className="text-center text-xl md:text-2xl font-light tracking-[0.2em]">TENSION BARBER</h1>
         </div>
-        {/* Fade gradient */}
-        <div className="h-8 bg-gradient-to-b from-black to-transparent" />
       </nav>
       
       {/* ==================== HERO SECTION ==================== */}
