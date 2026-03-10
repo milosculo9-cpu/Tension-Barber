@@ -11,7 +11,7 @@ const SALONS = [
     address: 'Bulevar kralja Petra I 85',
     fullName: 'Tension Barber I - Bulevar kralja Petra I 85',
     slug: 'bulevar-kralja-petra',
-    image: 'shop1.jpeg',
+    image: 'shop.jpeg',
     barbers: [
       { id: 1, name: 'Crni', slug: 'crni' },
       { id: 2, name: 'Kole', slug: 'kole' },
