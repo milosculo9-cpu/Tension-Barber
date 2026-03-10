@@ -289,88 +289,11 @@ export default function Home() {
       {/* ==================== PRELOADER ==================== */}
       {isLoading && (
         <div className={`fixed inset-0 z-[100] bg-black flex items-center justify-center transition-opacity duration-500 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
-          <div className="relative">
-            {/* SVG Logo with line drawing animation */}
-            <svg 
-              viewBox="0 0 200 60" 
-              className="w-64 md:w-80"
-              fill="none"
-            >
-              {/* T */}
-              <path 
-                d="M10 15 L30 15 M20 15 L20 45" 
-                stroke="white" 
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="logo-line"
-                style={{ strokeDasharray: 60, strokeDashoffset: 60 }}
-              />
-              {/* E */}
-              <path 
-                d="M35 15 L50 15 M35 15 L35 45 M35 30 L48 30 M35 45 L50 45" 
-                stroke="white" 
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="logo-line"
-                style={{ strokeDasharray: 90, strokeDashoffset: 90, animationDelay: '0.15s' }}
-              />
-              {/* N */}
-              <path 
-                d="M55 45 L55 15 L75 45 L75 15" 
-                stroke="white" 
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="logo-line"
-                style={{ strokeDasharray: 90, strokeDashoffset: 90, animationDelay: '0.3s' }}
-              />
-              {/* S */}
-              <path 
-                d="M95 20 Q80 15 80 25 Q80 32 88 32 Q95 32 95 40 Q95 50 80 45" 
-                stroke="white" 
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="logo-line"
-                style={{ strokeDasharray: 80, strokeDashoffset: 80, animationDelay: '0.45s' }}
-              />
-              {/* I */}
-              <path 
-                d="M105 15 L105 45" 
-                stroke="white" 
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="logo-line"
-                style={{ strokeDasharray: 30, strokeDashoffset: 30, animationDelay: '0.6s' }}
-              />
-              {/* O */}
-              <path 
-                d="M120 30 A10 15 0 1 1 120 30.1" 
-                stroke="white" 
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="logo-line"
-                style={{ strokeDasharray: 100, strokeDashoffset: 100, animationDelay: '0.75s' }}
-              />
-              {/* N */}
-              <path 
-                d="M140 45 L140 15 L160 45 L160 15" 
-                stroke="white" 
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="logo-line"
-                style={{ strokeDasharray: 90, strokeDashoffset: 90, animationDelay: '0.9s' }}
-              />
-            </svg>
-            
-            {/* Animated line under logo */}
-            <div className="mt-8 h-[1px] bg-white/20 w-64 md:w-80 mx-auto overflow-hidden">
-              <div className="h-full bg-white animate-loading-line"></div>
-            </div>
-            
-            {/* Tagline */}
-            <p className="text-center text-white/40 text-xs tracking-[0.3em] mt-4 uppercase opacity-0 animate-fade-in-delayed">
-              BARBER SHOP
-            </p>
-          </div>
+          <img 
+            src={getLogoUrl('logo.white.PNG')} 
+            alt="Tension Barber" 
+            className="h-12 md:h-16 animate-pulse-logo"
+          />
         </div>
       )}
 
