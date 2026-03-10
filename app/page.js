@@ -103,6 +103,8 @@ function generateTimeSlots(barberId) {
 }
 
 export default function Home() {
+  const [isLoading, setIsLoading] = useState(true)
+  const [preloaderFading, setPreloaderFading] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [selectedSalon, setSelectedSalon] = useState(null)
   const [selectedDate, setSelectedDate] = useState(null)
@@ -117,6 +119,51 @@ export default function Home() {
   const [confirmedBooking, setConfirmedBooking] = useState(null)
   
   const dates = generateDates()
+
+  // Preload critical images
+  useEffect(() => {
+    const imagesToPreload = [
+      getLogoUrl('logo.white.PNG'),
+      ...HERO_IMAGES.slice(0, 3).map(img => getBackgroundImageUrl(img)),
+      ...SALONS.map(s => `${STORAGE_URL}/shops/${s.image}`),
+    ]
+
+    let loadedCount = 0
+    const totalImages = imagesToPreload.length
+
+    const preloadImage = (src) => {
+      return new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+          loadedCount++
+          resolve()
+        }
+        img.onerror = () => {
+          loadedCount++
+          resolve()
+        }
+        img.src = src
+      })
+    }
+
+    const hidePreloader = () => {
+      setPreloaderFading(true)
+      setTimeout(() => {
+        setIsLoading(false)
+      }, 500) // Wait for fade out animation
+    }
+
+    // Start preloading
+    Promise.all(imagesToPreload.map(preloadImage)).then(() => {
+      // Add small delay for smooth animation completion
+      setTimeout(hidePreloader, 2000) // Wait for logo animation to complete
+    })
+
+    // Fallback timeout in case images take too long
+    const timeout = setTimeout(hidePreloader, 5000)
+
+    return () => clearTimeout(timeout)
+  }, [])
 
   // Load saved customer data from localStorage on mount
   useEffect(() => {
@@ -239,6 +286,94 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black text-white">
       
+      {/* ==================== PRELOADER ==================== */}
+      {isLoading && (
+        <div className={`fixed inset-0 z-[100] bg-black flex items-center justify-center transition-opacity duration-500 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
+          <div className="relative">
+            {/* SVG Logo with line drawing animation */}
+            <svg 
+              viewBox="0 0 200 60" 
+              className="w-64 md:w-80"
+              fill="none"
+            >
+              {/* T */}
+              <path 
+                d="M10 15 L30 15 M20 15 L20 45" 
+                stroke="white" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="logo-line"
+                style={{ strokeDasharray: 60, strokeDashoffset: 60 }}
+              />
+              {/* E */}
+              <path 
+                d="M35 15 L50 15 M35 15 L35 45 M35 30 L48 30 M35 45 L50 45" 
+                stroke="white" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="logo-line"
+                style={{ strokeDasharray: 90, strokeDashoffset: 90, animationDelay: '0.15s' }}
+              />
+              {/* N */}
+              <path 
+                d="M55 45 L55 15 L75 45 L75 15" 
+                stroke="white" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="logo-line"
+                style={{ strokeDasharray: 90, strokeDashoffset: 90, animationDelay: '0.3s' }}
+              />
+              {/* S */}
+              <path 
+                d="M95 20 Q80 15 80 25 Q80 32 88 32 Q95 32 95 40 Q95 50 80 45" 
+                stroke="white" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="logo-line"
+                style={{ strokeDasharray: 80, strokeDashoffset: 80, animationDelay: '0.45s' }}
+              />
+              {/* I */}
+              <path 
+                d="M105 15 L105 45" 
+                stroke="white" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="logo-line"
+                style={{ strokeDasharray: 30, strokeDashoffset: 30, animationDelay: '0.6s' }}
+              />
+              {/* O */}
+              <path 
+                d="M120 30 A10 15 0 1 1 120 30.1" 
+                stroke="white" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="logo-line"
+                style={{ strokeDasharray: 100, strokeDashoffset: 100, animationDelay: '0.75s' }}
+              />
+              {/* N */}
+              <path 
+                d="M140 45 L140 15 L160 45 L160 15" 
+                stroke="white" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="logo-line"
+                style={{ strokeDasharray: 90, strokeDashoffset: 90, animationDelay: '0.9s' }}
+              />
+            </svg>
+            
+            {/* Animated line under logo */}
+            <div className="mt-8 h-[1px] bg-white/20 w-64 md:w-80 mx-auto overflow-hidden">
+              <div className="h-full bg-white animate-loading-line"></div>
+            </div>
+            
+            {/* Tagline */}
+            <p className="text-center text-white/40 text-xs tracking-[0.3em] mt-4 uppercase opacity-0 animate-fade-in-delayed">
+              BARBER SHOP
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ==================== NAVBAR ==================== */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ${showNavbar ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="bg-gradient-to-b from-black via-black/80 to-transparent pt-5 pb-12 px-6">
