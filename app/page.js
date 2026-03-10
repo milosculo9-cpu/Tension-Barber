@@ -533,7 +533,7 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">Bulevar patrijarha Pavla</p>
-                  <p className="text-white font-medium">09:00 - 22:00</p>
+                  <p className="text-white font-medium">10:00 - 22:00</p>
                 </div>
                 <div className="pt-2">
                   <p className="text-gray-500">Nedelja</p>
