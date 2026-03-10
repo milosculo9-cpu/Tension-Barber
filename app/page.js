@@ -123,7 +123,7 @@ export default function Home() {
   // Preload critical images
   useEffect(() => {
     const imagesToPreload = [
-      getLogoUrl('logo.white.PNG'),
+      getLogoUrl('white'),
       ...HERO_IMAGES.slice(0, 3).map(img => getBackgroundImageUrl(img)),
       ...SALONS.map(s => `${STORAGE_URL}/shops/${s.image}`),
     ]
@@ -290,7 +290,7 @@ export default function Home() {
       {isLoading && (
         <div className={`fixed inset-0 z-[100] bg-black flex items-center justify-center transition-opacity duration-500 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
           <img 
-            src={getLogoUrl('logo.white.PNG')} 
+            src={getLogoUrl('white')} 
             alt="Tension Barber" 
             className="h-12 md:h-16 animate-pulse-logo"
           />
