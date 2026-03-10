@@ -24,7 +24,7 @@ const SALONS = [
     address: 'Bulevar patrijarha Pavla 117',
     fullName: 'Tension Barber II - Bulevar patrijarha Pavla 117',
     slug: 'bulevar-patrijarha-pavla',
-    image: 'shop1.jpeg', // TODO: Replace with shop2.jpeg when available
+    image: 'shop2.jpeg',
     barbers: [
       { id: 4, name: 'Rade', slug: 'rade' },
       { id: 5, name: 'Milan', slug: 'milan' },
@@ -36,10 +36,13 @@ const SALONS = [
 
 const HERO_IMAGES = [
   'IMG_8161.jpeg',
-  'IMG_8162.jpeg',
-  'IMG_8163.jpeg',
-  'IMG_8166.jpeg',
+  'IMG_4953.jpeg',
+  'IMG_3.jpeg',
+  'IMG_4951.jpeg',
   'IMG_8168.jpeg',
+  'IMG_4958.jpeg',
+  'IMG_8166.jpeg',
+  'IMG_4955.jpeg',
   'IMG_8169.jpeg',
 ]
 
