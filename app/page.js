@@ -559,14 +559,14 @@ export default function Home() {
       {/* ==================== BOOKING MODAL ==================== */}
       {showForm && (
         <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 animate-fade-in"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-3 animate-fade-in overflow-y-auto"
           onClick={() => setShowForm(false)}
         >
           <div 
-            className="bg-zinc-900 p-6 md:p-8 rounded-lg max-w-md w-full animate-slide-up"
+            className="bg-zinc-900 p-5 md:p-8 rounded-lg max-w-md w-full animate-slide-up my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex justify-between items-start mb-5">
               <div>
                 <h3 className="text-lg md:text-xl font-semibold">Zakaži termin</h3>
                 <p className="text-sm text-gray-500 mt-1">
@@ -581,12 +581,12 @@ export default function Home() {
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Izaberite uslugu *</label>
                 <select
                   required
-                  className="w-full bg-black border border-zinc-700 rounded px-4 py-3 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer"
+                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer"
                   value={selectedService?.id || ''}
                   onChange={(e) => {
                     const service = SERVICES.find(s => s.id === parseInt(e.target.value))
@@ -606,7 +606,7 @@ export default function Home() {
                   type="email"
                   required
                   placeholder="Email adresa *"
-                  className="w-full bg-black border border-zinc-700 rounded px-4 py-3 text-sm focus:border-white focus:outline-none transition"
+                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />
@@ -616,7 +616,7 @@ export default function Home() {
                   type="text"
                   required
                   placeholder="Ime *"
-                  className="w-full bg-black border border-zinc-700 rounded px-4 py-3 text-sm focus:border-white focus:outline-none transition"
+                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
@@ -626,7 +626,7 @@ export default function Home() {
                   type="tel"
                   required
                   placeholder="Telefon *"
-                  className="w-full bg-black border border-zinc-700 rounded px-4 py-3 text-sm focus:border-white focus:outline-none transition"
+                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
@@ -635,7 +635,7 @@ export default function Home() {
                 <label className="text-xs text-gray-500 block mb-1">Datum rođenja (za popust)</label>
                 <input
                   type="date"
-                  className="w-full bg-black border border-zinc-700 rounded px-4 py-3 text-sm focus:border-white focus:outline-none transition"
+                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition"
                   value={form.birthday}
                   onChange={(e) => setForm({ ...form, birthday: e.target.value })}
                 />
@@ -643,7 +643,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={isSubmitting || !selectedService}
-                className="w-full bg-white text-black font-semibold py-4 rounded hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                className="w-full bg-white text-black font-semibold py-3 rounded hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed mt-2"
               >
                 {isSubmitting ? 'ČEKAJTE...' : 'POTVRDI REZERVACIJU'}
               </button>
