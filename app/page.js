@@ -526,11 +526,19 @@ export default function Home() {
                 </svg>
               </div>
               <h3 className="font-medium text-sm tracking-wider mb-4">RADNO VREME</h3>
-              <div className="text-sm text-gray-400 space-y-1">
-                <p>Ponedeljak - Subota</p>
-                <p className="text-white font-medium">09:00 - 23:00</p>
-                <p className="mt-3">Nedelja</p>
-                <p className="text-white font-medium">12:00 - 18:00</p>
+              <div className="text-sm text-gray-400 space-y-3">
+                <div>
+                  <p className="text-gray-500 text-xs">Bulevar kralja Petra I</p>
+                  <p className="text-white font-medium">10:00 - 18:00</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">Bulevar patrijarha Pavla</p>
+                  <p className="text-white font-medium">09:00 - 22:00</p>
+                </div>
+                <div className="pt-2">
+                  <p className="text-gray-500">Nedelja</p>
+                  <p className="text-white font-medium">Neradna</p>
+                </div>
               </div>
             </div>
             
