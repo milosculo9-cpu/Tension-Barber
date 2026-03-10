@@ -150,7 +150,7 @@ export default function Home() {
       setPreloaderFading(true)
       setTimeout(() => {
         setIsLoading(false)
-      }, 500) // Wait for fade out animation
+      }, 700) // Wait for fade out animation
     }
 
     // Start preloading
@@ -288,11 +288,11 @@ export default function Home() {
       
       {/* ==================== PRELOADER ==================== */}
       {isLoading && (
-        <div className={`fixed inset-0 z-[100] bg-black flex items-center justify-center transition-opacity duration-500 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center transition-opacity duration-700 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
           <img 
             src={getLogoUrl('white')} 
             alt="Tension Barber" 
-            className="h-12 md:h-16 animate-pulse-logo"
+            className="w-60 md:w-72 lg:w-80 animate-pulse-logo"
           />
         </div>
       )}
