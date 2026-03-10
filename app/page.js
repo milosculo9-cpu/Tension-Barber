@@ -120,8 +120,16 @@ export default function Home() {
   // Scroll to section
   const scrollToSection = (id) => {
     setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
+      const element = document.getElementById(id)
+      if (element) {
+        const offset = 20 // Small offset from top
+        const elementPosition = element.getBoundingClientRect().top + window.pageYOffset
+        window.scrollTo({
+          top: elementPosition - offset,
+          behavior: 'smooth'
+        })
+      }
+    }, 150)
   }
 
   // Handle booking submission
@@ -285,7 +293,13 @@ export default function Home() {
                 <p className="text-gray-500 text-sm mt-1">{selectedSalon.address}, Novi Sad</p>
               </div>
               <button 
-                onClick={() => setSelectedSalon(null)} 
+                onClick={() => {
+                  setSelectedSalon(null)
+                  setSelectedDate(null)
+                  setSelectedBarber(null)
+                  setSelectedTime(null)
+                  scrollToSection('salon-section')
+                }} 
                 className="text-gray-500 text-sm underline underline-offset-4 hover:text-white transition"
               >
                 ← Promeni salon
