@@ -102,13 +102,12 @@ export default function Home() {
     return () => clearInterval(timer)
   }, [])
 
-  // Hide navbar on scroll down, show only when back at hero section
+  // Show navbar only when at very top of page
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY
-      const heroHeight = window.innerHeight * 0.8 // 80% of viewport height
-      // Only show navbar when in hero section
-      if (currentScrollY < heroHeight) {
+      // Only show navbar when at the very top
+      if (currentScrollY < 10) {
         setShowNavbar(true)
       } else {
         setShowNavbar(false)
