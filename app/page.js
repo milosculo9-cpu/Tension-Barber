@@ -122,47 +122,18 @@ export default function Home() {
 
   // Preload critical images
   useEffect(() => {
-    const imagesToPreload = [
-      getLogoUrl('white'),
-      ...HERO_IMAGES.slice(0, 3).map(img => getBackgroundImageUrl(img)),
-      ...SALONS.map(s => `${STORAGE_URL}/shops/${s.image}`),
-    ]
-
-    let loadedCount = 0
-    const totalImages = imagesToPreload.length
-
-    const preloadImage = (src) => {
-      return new Promise((resolve) => {
-        const img = new Image()
-        img.onload = () => {
-          loadedCount++
-          resolve()
-        }
-        img.onerror = () => {
-          loadedCount++
-          resolve()
-        }
-        img.src = src
-      })
-    }
-
     const hidePreloader = () => {
       setPreloaderFading(true)
       setTimeout(() => {
         setIsLoading(false)
-      }, 700) // Wait for fade out animation
+      }, 700)
     }
 
-    // Start preloading
-    Promise.all(imagesToPreload.map(preloadImage)).then(() => {
-      // Add small delay for smooth animation completion
-      setTimeout(hidePreloader, 2000) // Wait for logo animation to complete
-    })
+    // Simple approach: wait for minimum time, then hide
+    // This ensures pulse animation plays and gives time for images to load
+    const timer = setTimeout(hidePreloader, 2500)
 
-    // Fallback timeout in case images take too long
-    const timeout = setTimeout(hidePreloader, 5000)
-
-    return () => clearTimeout(timeout)
+    return () => clearTimeout(timer)
   }, [])
 
   // Load saved customer data from localStorage on mount
