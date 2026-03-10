@@ -563,7 +563,7 @@ export default function Home() {
           onClick={() => setShowForm(false)}
         >
           <div 
-            className="bg-zinc-900 p-4 md:p-8 rounded-lg max-w-md w-full animate-slide-up my-auto"
+            className="bg-zinc-900 p-4 md:p-8 rounded-lg max-w-md w-full animate-slide-up my-auto overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-4">
@@ -635,7 +635,8 @@ export default function Home() {
                 <label className="text-xs text-gray-500 block mb-1">Datum rođenja (za popust)</label>
                 <input
                   type="date"
-                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2 text-sm focus:border-white focus:outline-none transition"
+                  className="w-full max-w-full bg-black border border-zinc-700 rounded px-3 py-2 text-sm focus:border-white focus:outline-none transition box-border"
+                  style={{ maxWidth: '100%' }}
                   value={form.birthday}
                   onChange={(e) => setForm({ ...form, birthday: e.target.value })}
                 />
