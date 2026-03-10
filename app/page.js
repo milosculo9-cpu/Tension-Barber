@@ -158,6 +158,15 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black text-white">
       
+      {/* ==================== NAVBAR ==================== */}
+      <nav className="fixed top-0 left-0 right-0 z-50">
+        <div className="bg-black py-4 px-6">
+          <p className="text-center text-sm md:text-base font-medium tracking-[0.3em]">TENSION BARBER</p>
+        </div>
+        {/* Fade gradient */}
+        <div className="h-8 bg-gradient-to-b from-black to-transparent" />
+      </nav>
+      
       {/* ==================== HERO SECTION ==================== */}
       <section className="hero-section">
         {/* Background Slides */}
