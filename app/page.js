@@ -91,7 +91,6 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [form, setForm] = useState({ email: '', name: '', phone: '', birthday: '' })
   const [showNavbar, setShowNavbar] = useState(true)
-  const [lastScrollY, setLastScrollY] = useState(0)
   
   const dates = generateDates()
 
@@ -103,20 +102,21 @@ export default function Home() {
     return () => clearInterval(timer)
   }, [])
 
-  // Hide navbar on scroll down, show on scroll up
+  // Hide navbar on scroll down, show only when back at hero section
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY
-      if (currentScrollY > lastScrollY && currentScrollY > 100) {
-        setShowNavbar(false)
-      } else {
+      const heroHeight = window.innerHeight * 0.8 // 80% of viewport height
+      // Only show navbar when in hero section
+      if (currentScrollY < heroHeight) {
         setShowNavbar(true)
+      } else {
+        setShowNavbar(false)
       }
-      setLastScrollY(currentScrollY)
     }
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [lastScrollY])
+  }, [])
 
   // Scroll to section
   const scrollToSection = (id) => {
