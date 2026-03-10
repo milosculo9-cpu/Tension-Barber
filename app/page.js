@@ -126,7 +126,7 @@ export default function Home() {
       setPreloaderFading(true)
       setTimeout(() => {
         setIsLoading(false)
-      }, 700)
+      }, 1000)
     }
 
     // Simple approach: wait for minimum time, then hide
@@ -259,7 +259,7 @@ export default function Home() {
       
       {/* ==================== PRELOADER ==================== */}
       {isLoading && (
-        <div className={`fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center transition-opacity duration-700 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center transition-opacity duration-1000 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
           <img 
             src={getLogoUrl('white')} 
             alt="Tension Barber" 
