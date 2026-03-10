@@ -94,6 +94,19 @@ export default function Home() {
   
   const dates = generateDates()
 
+  // Load saved customer data from localStorage on mount
+  useEffect(() => {
+    const savedCustomer = localStorage.getItem('tensionBarberCustomer')
+    if (savedCustomer) {
+      try {
+        const customerData = JSON.parse(savedCustomer)
+        setForm(customerData)
+      } catch (e) {
+        console.error('Error loading saved customer data:', e)
+      }
+    }
+  }, [])
+
   // Auto-slide every 3 seconds
   useEffect(() => {
     const timer = setInterval(() => {
@@ -158,10 +171,13 @@ export default function Home() {
 
       if (error) throw error
 
+      // Save customer data to localStorage for next time
+      localStorage.setItem('tensionBarberCustomer', JSON.stringify(form))
+
       // Success
       setShowForm(false)
       setShowConfirm(true)
-      setForm({ email: '', name: '', phone: '', birthday: '' })
+      // Don't reset form - keep data for next booking
       
       setTimeout(() => {
         setShowConfirm(false)
