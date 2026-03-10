@@ -292,7 +292,7 @@ export default function Home() {
           <img 
             src={getLogoUrl('white')} 
             alt="Tension Barber" 
-            className="w-60 md:w-72 lg:w-80 animate-pulse-logo"
+            className="w-60 md:w-72 lg:w-80 animate-pulse-logo -mt-20"
           />
         </div>
       )}
