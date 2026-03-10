@@ -7,10 +7,11 @@ import { supabase, STORAGE_URL, getLogoUrl, getBarberImageUrl, getBackgroundImag
 const SALONS = [
   {
     id: 1,
-    name: 'Tension Barber',
+    name: 'Tension Barber I',
     address: 'Bulevar kralja Petra I 85',
-    fullName: 'Tension Barber Bulevar kralja Petra I 85',
+    fullName: 'Tension Barber I - Bulevar kralja Petra I 85',
     slug: 'bulevar-kralja-petra',
+    image: 'shop1.jpeg',
     barbers: [
       { id: 1, name: 'Crni', slug: 'crni' },
       { id: 2, name: 'Kole', slug: 'kole' },
@@ -19,10 +20,11 @@ const SALONS = [
   },
   {
     id: 2,
-    name: 'Tension Barber',
+    name: 'Tension Barber II',
     address: 'Bulevar patrijarha Pavla 117',
-    fullName: 'Tension Barber Bulevar patrijarha Pavla 117',
+    fullName: 'Tension Barber II - Bulevar patrijarha Pavla 117',
     slug: 'bulevar-patrijarha-pavla',
+    image: 'shop1.jpeg', // TODO: Replace with shop2.jpeg when available
     barbers: [
       { id: 4, name: 'Rade', slug: 'rade' },
       { id: 5, name: 'Milan', slug: 'milan' },
@@ -203,11 +205,11 @@ export default function Home() {
 
       {/* ==================== SALON SELECTION ==================== */}
       <section id="salon-section" className="py-20 px-4 bg-black">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h2 className="text-center text-xl md:text-2xl font-light tracking-[0.2em] mb-2">IZABERI SALON</h2>
           <p className="text-center text-gray-500 text-sm mb-12">Odaberi lokaciju za zakazivanje</p>
           
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-8">
             {SALONS.map((salon) => (
               <button
                 key={salon.id}
@@ -218,16 +220,31 @@ export default function Home() {
                   setSelectedTime(null)
                   scrollToSection('date-section')
                 }}
-                className={`salon-card p-8 text-left ${selectedSalon?.id === salon.id ? 'selected' : ''}`}
+                className={`group relative overflow-hidden rounded-lg border border-zinc-800 transition-all duration-300 hover:border-white ${selectedSalon?.id === salon.id ? 'border-white' : ''}`}
               >
-                <h3 className="text-xl font-semibold">{salon.name}</h3>
-                <p className="text-gray-400 text-sm mt-1">{salon.address}</p>
-                <p className="text-gray-600 text-xs">Novi Sad</p>
-                <div className="mt-5 text-xs text-gray-500 flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  {salon.barbers.length} berbera
+                {/* Background Image */}
+                <div className="aspect-[16/10] w-full">
+                  <img 
+                    src={`${STORAGE_URL}/shops/${salon.image}`}
+                    alt={salon.name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                </div>
+                
+                {/* Overlay gradient */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
+                
+                {/* Content */}
+                <div className="absolute bottom-0 left-0 right-0 p-6 text-left">
+                  <h3 className="text-2xl font-semibold">{salon.name}</h3>
+                  <p className="text-gray-300 text-sm mt-1">{salon.address}</p>
+                  <p className="text-gray-500 text-xs">Novi Sad</p>
+                  <div className="mt-4 text-xs text-gray-400 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {salon.barbers.length} berbera
+                  </div>
                 </div>
               </button>
             ))}
