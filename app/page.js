@@ -46,6 +46,25 @@ const HERO_IMAGES = [
   'IMG_8169.jpeg',
 ]
 
+const SERVICES = [
+  { id: 1, name: 'Šišanje "Fejd"', price: 1200 },
+  { id: 2, name: 'Šišanje duža kosa', price: 1500 },
+  { id: 3, name: 'Šišanje zatvorski', price: 800 },
+  { id: 4, name: 'Brijanje glave britvom', price: 800 },
+  { id: 5, name: 'Trimovanje i konture brade', price: 600 },
+  { id: 6, name: 'Konture brade', price: 350 },
+  { id: 7, name: 'Oblikovanje obrva koncem', price: 400 },
+  { id: 8, name: 'Oblikovanje obrva britvom', price: 300 },
+  { id: 9, name: 'Pranje kose', price: 350 },
+  { id: 10, name: 'Vosak uši', price: 300 },
+  { id: 11, name: 'Vosak nos', price: 300 },
+  { id: 12, name: 'Farbanje kose', price: null },
+  { id: 13, name: 'Farbanje brade', price: null },
+  { id: 14, name: 'Tension Full Paket', price: 3000 },
+  { id: 15, name: '"Vanredno" šišanje', price: 1500 },
+  { id: 16, name: 'Tension All Inclusive', price: 3500 },
+]
+
 // Generate dates for next 2 weeks
 function generateDates() {
   const dates = []
@@ -89,11 +108,13 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedBarber, setSelectedBarber] = useState(null)
   const [selectedTime, setSelectedTime] = useState(null)
+  const [selectedService, setSelectedService] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [form, setForm] = useState({ email: '', name: '', phone: '', birthday: '' })
   const [showNavbar, setShowNavbar] = useState(true)
+  const [confirmedBooking, setConfirmedBooking] = useState(null)
   
   const dates = generateDates()
 
@@ -151,6 +172,12 @@ export default function Home() {
   // Handle booking submission
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    if (!selectedService) {
+      alert('Molimo izaberite uslugu.')
+      return
+    }
+    
     setIsSubmitting(true)
 
     try {
@@ -160,7 +187,8 @@ export default function Home() {
         .insert([
           {
             barber_id: selectedBarber.id,
-            service_id: '00000000-0000-0000-0000-000000000001', // Default service
+            service_name: selectedService.name,
+            service_price: selectedService.price,
             customer_name: form.name,
             customer_email: form.email,
             customer_phone: form.phone,
@@ -177,18 +205,28 @@ export default function Home() {
       // Save customer data to localStorage for next time
       localStorage.setItem('tensionBarberCustomer', JSON.stringify(form))
 
+      // Save booking info for confirmation display
+      setConfirmedBooking({
+        service: selectedService,
+        barber: selectedBarber,
+        date: selectedDate,
+        time: selectedTime
+      })
+
       // Success
       setShowForm(false)
       setShowConfirm(true)
+      setSelectedService(null)
       // Don't reset form - keep data for next booking
       
       setTimeout(() => {
         setShowConfirm(false)
+        setConfirmedBooking(null)
         setSelectedSalon(null)
         setSelectedDate(null)
         setSelectedBarber(null)
         setSelectedTime(null)
-      }, 4000)
+      }, 5000)
 
     } catch (error) {
       console.error('Booking error:', error)
@@ -545,6 +583,25 @@ export default function Home() {
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
+                <label className="text-xs text-gray-500 block mb-1">Izaberite uslugu *</label>
+                <select
+                  required
+                  className="w-full bg-black border border-zinc-700 rounded px-4 py-3 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer"
+                  value={selectedService?.id || ''}
+                  onChange={(e) => {
+                    const service = SERVICES.find(s => s.id === parseInt(e.target.value))
+                    setSelectedService(service)
+                  }}
+                >
+                  <option value="">-- Izaberite uslugu --</option>
+                  {SERVICES.map((service) => (
+                    <option key={service.id} value={service.id}>
+                      {service.name} {service.price ? `- ${service.price.toLocaleString()} RSD` : '- cena po dogovoru'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <input
                   type="email"
                   required
@@ -585,7 +642,7 @@ export default function Home() {
               </div>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !selectedService}
                 className="w-full bg-white text-black font-semibold py-4 rounded hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed mt-2"
               >
                 {isSubmitting ? 'ČEKAJTE...' : 'POTVRDI REZERVACIJU'}
@@ -597,13 +654,26 @@ export default function Home() {
 
       {/* ==================== CONFIRMATION ==================== */}
       {showConfirm && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 animate-slide-up">
-          <svg className="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          <div>
-            <p className="font-semibold">Termin uspešno zakazan!</p>
-            <p className="text-sm text-green-200">Potvrda će biti poslata na email.</p>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-5 rounded-lg shadow-2xl animate-slide-up max-w-sm w-full mx-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <div>
+              <p className="font-semibold text-lg">Rezervacija potvrđena!</p>
+              {confirmedBooking && (
+                <div className="mt-2 text-sm text-green-100 space-y-1">
+                  <p>{confirmedBooking.service.name}</p>
+                  <p className="font-semibold text-white">
+                    {confirmedBooking.service.price 
+                      ? `Cena: ${confirmedBooking.service.price.toLocaleString()} RSD`
+                      : 'Cena: po dogovoru'
+                    }
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-green-200 mt-2">Potvrda će biti poslata na email.</p>
+            </div>
           </div>
         </div>
       )}
