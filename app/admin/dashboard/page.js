@@ -31,25 +31,6 @@ const getNext14Days = () => {
   return days;
 };
 
-// Generate barber image URL based on name
-const getBarberImageUrl = (barber) => {
-  if (barber.image_url) return barber.image_url;
-  
-  // Try common patterns based on barber name
-  const name = barber.name?.toLowerCase()
-    .replace(/đ/g, 'dj')
-    .replace(/č/g, 'c')
-    .replace(/ć/g, 'c')
-    .replace(/š/g, 's')
-    .replace(/ž/g, 'z')
-    .replace(/[^a-z]/g, '');
-  
-  if (name) {
-    return `${STORAGE_URL}/barbers/${name}.jpg`;
-  }
-  return null;
-};
-
 const dayNames = ['NED', 'PON', 'UTO', 'SRE', 'CET', 'PET', 'SUB'];
 const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AVG', 'SEP', 'OKT', 'NOV', 'DEC'];
 
@@ -67,6 +48,7 @@ export default function Dashboard() {
   const [allBarbers, setAllBarbers] = useState([]);
   const [locations, setLocations] = useState([]);
   const [slotsLocked, setSlotsLocked] = useState(false);
+  const [newAppointmentAlert, setNewAppointmentAlert] = useState(null);
   
   const [editingService, setEditingService] = useState(null);
   const [editingBarber, setEditingBarber] = useState(null);
@@ -75,10 +57,9 @@ export default function Dashboard() {
   const [newBarberLocation, setNewBarberLocation] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imgErrors, setImgErrors] = useState({});
   
   const fileInputRef = useRef(null);
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
   const router = useRouter();
   const supabase = createClientComponentClient();
   const days = getNext14Days();
@@ -90,54 +71,11 @@ export default function Dashboard() {
     { id: 'podesavanja', label: 'Podesavanja' }
   ];
 
-  // Change tab and scroll to top
   const changeTab = (tabId) => {
     setActiveTab(tabId);
     setAdminSection(null);
-    // Scroll to top immediately
     window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
   };
-
-  // Swipe handler for tabs
-  useEffect(() => {
-    let startX = 0;
-    let startY = 0;
-    
-    const handleTouchStart = (e) => {
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-    };
-
-    const handleTouchEnd = (e) => {
-      const endX = e.changedTouches[0].clientX;
-      const endY = e.changedTouches[0].clientY;
-      
-      const diffX = startX - endX;
-      const diffY = startY - endY;
-      
-      // Only trigger if horizontal movement is dominant and significant
-      if (Math.abs(diffX) > Math.abs(diffY) * 2.5 && Math.abs(diffX) > 80) {
-        const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
-        const currentIndex = availableTabs.findIndex(t => t.id === activeTab);
-        
-        if (diffX > 0 && currentIndex < availableTabs.length - 1) {
-          changeTab(availableTabs[currentIndex + 1].id);
-        } else if (diffX < 0 && currentIndex > 0) {
-          changeTab(availableTabs[currentIndex - 1].id);
-        }
-      }
-    };
-
-    document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    document.addEventListener('touchend', handleTouchEnd, { passive: true });
-
-    return () => {
-      document.removeEventListener('touchstart', handleTouchStart);
-      document.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [activeTab, barber]);
 
   useEffect(() => {
     loadBarberData();
@@ -149,6 +87,51 @@ export default function Dashboard() {
       loadAppointments();
     }
   }, [selectedDate, barber]);
+
+  // Real-time subscription for new appointments
+  useEffect(() => {
+    if (!barber) return;
+
+    const channel = supabase
+      .channel('appointments-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'appointments',
+          filter: `barber_id=eq.${barber.id}`
+        },
+        (payload) => {
+          console.log('New appointment:', payload);
+          // Show alert
+          setNewAppointmentAlert(payload.new);
+          // Reload appointments
+          loadAppointments();
+          loadStats(barber.id);
+          // Hide alert after 5 seconds
+          setTimeout(() => setNewAppointmentAlert(null), 5000);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'appointments',
+          filter: `barber_id=eq.${barber.id}`
+        },
+        () => {
+          loadAppointments();
+          loadStats(barber.id);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [barber]);
 
   const loadBarberData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -404,13 +387,7 @@ export default function Dashboard() {
     setUploadingImage(true);
     
     const fileExt = file.name.split('.').pop().toLowerCase();
-    const fileName = `${editingBarber.name.toLowerCase()
-      .replace(/đ/g, 'dj')
-      .replace(/č/g, 'c')
-      .replace(/ć/g, 'c')
-      .replace(/š/g, 's')
-      .replace(/ž/g, 'z')
-      .replace(/[^a-z]/g, '')}.${fileExt}`;
+    const fileName = `${editingBarber.name.toLowerCase().replace(/[^a-z]/g, '')}.${fileExt}`;
     
     const { error: uploadError } = await supabase.storage
       .from('barbers')
@@ -442,33 +419,27 @@ export default function Dashboard() {
   const timeSlots = generateTimeSlots(barber.locations?.name);
   const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
 
-  // Image component with fallback
-  const BarberImage = ({ barber: b, size = 'md' }) => {
-    const [imgError, setImgError] = useState(false);
-    const imageUrl = getBarberImageUrl(b);
-    const sizeClass = size === 'lg' ? 'w-32 h-32' : 'w-12 h-12';
-    const iconSize = size === 'lg' ? 'text-5xl' : 'text-xl';
-    
-    if (!imageUrl || imgError) {
-      return (
-        <div className={`${sizeClass} rounded-full bg-white/10 flex items-center justify-center text-white/30 ${iconSize} ${size === 'lg' ? 'border-2 border-white/20' : ''}`}>
-          👤
-        </div>
-      );
-    }
-    
-    return (
-      <img 
-        src={imageUrl} 
-        alt={b.name} 
-        className={`${sizeClass} rounded-full object-cover ${size === 'lg' ? 'border-2 border-white/20' : ''}`}
-        onError={() => setImgError(true)}
-      />
-    );
-  };
-
   return (
     <div className="min-h-screen bg-black text-white">
+      
+      {/* New Appointment Alert */}
+      {newAppointmentAlert && (
+        <div className="fixed top-4 left-4 right-4 z-50 bg-green-600 text-white p-4 rounded-lg shadow-2xl animate-slide-down">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎉</span>
+            <div>
+              <p className="font-bold">Nova rezervacija!</p>
+              <p className="text-sm text-green-100">
+                {newAppointmentAlert.customer_name} - {newAppointmentAlert.service_name}
+              </p>
+              <p className="text-xs text-green-200">
+                {newAppointmentAlert.appointment_date} u {newAppointmentAlert.appointment_time?.slice(0, 5)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="sticky top-0 bg-black z-40 border-b border-white/10">
         <div className="text-center py-4 border-b border-white/10">
           <h1 className="text-lg tracking-[0.2em] font-light">
@@ -563,7 +534,7 @@ export default function Dashboard() {
               </div>
               
               {slotsLocked && (
-                <p className="text-green-400 text-xs mt-3 text-center">✓ Termini su zakljucani</p>
+                <p className="text-green-400 text-xs mt-3 text-center">Termini su zakljucani</p>
               )}
             </section>
 
@@ -595,10 +566,12 @@ export default function Dashboard() {
                         <p className="font-medium">{apt.customer_name}</p>
                         <p className="text-white/50 text-sm">{apt.service_name}</p>
                         <p className="text-white/30 text-sm mt-1">
-                          {new Date(apt.appointment_date).toLocaleDateString('sr-RS')} • {apt.appointment_time?.slice(0, 5)}
+                          {new Date(apt.appointment_date).toLocaleDateString('sr-RS')} - {apt.appointment_time?.slice(0, 5)}
                         </p>
                         {apt.customer_phone && (
-                          <p className="text-white/30 text-sm">{apt.customer_phone}</p>
+                          <a href={`tel:${apt.customer_phone}`} className="text-white/40 text-sm hover:text-white">
+                            📞 {apt.customer_phone}
+                          </a>
                         )}
                       </div>
                       <div className="text-right">
@@ -695,7 +668,18 @@ export default function Dashboard() {
                           className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center"
                         >
                           <div className="flex items-center gap-3">
-                            <BarberImage barber={b} size="md" />
+                            {b.image_url && !imgErrors[b.id] ? (
+                              <img 
+                                src={b.image_url} 
+                                alt={b.name} 
+                                className="w-12 h-12 rounded-full object-cover"
+                                onError={() => setImgErrors(prev => ({...prev, [b.id]: true}))}
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-xl">
+                                👤
+                              </div>
+                            )}
                             <div className="text-left">
                               <span className="font-medium">{b.name}</span>
                               {b.is_admin && <span className="text-xs text-white/30 ml-2">ADMIN</span>}
@@ -750,11 +734,18 @@ export default function Dashboard() {
                   <div>
                     <h2 className="text-white/40 text-xs tracking-wider mb-4">IZMENI BERBERA</h2>
                     
-                    {/* Barber Image - Large */}
                     <div className="flex flex-col items-center mb-6">
-                      <div className="mb-4">
-                        <BarberImage barber={editingBarber} size="lg" />
-                      </div>
+                      {editingBarber.image_url ? (
+                        <img 
+                          src={editingBarber.image_url} 
+                          alt={editingBarber.name} 
+                          className="w-32 h-32 rounded-full object-cover mb-4 border-2 border-white/20"
+                        />
+                      ) : (
+                        <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-5xl mb-4 border-2 border-white/20">
+                          👤
+                        </div>
+                      )}
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -771,7 +762,6 @@ export default function Dashboard() {
                       </button>
                     </div>
 
-                    {/* Name */}
                     <div className="mb-4">
                       <label className="block text-white/40 text-xs mb-2">IME</label>
                       <input
@@ -783,13 +773,11 @@ export default function Dashboard() {
                       />
                     </div>
 
-                    {/* Location */}
                     <div className="mb-6">
                       <label className="block text-white/40 text-xs mb-2">LOKACIJA</label>
                       <p className="text-white/50 bg-white/5 rounded-lg px-4 py-3">{editingBarber.locations?.name}</p>
                     </div>
 
-                    {/* Delete button - only for non-admin */}
                     {!editingBarber.is_admin && (
                       <button
                         onClick={() => deleteBarber(editingBarber.id)}
@@ -806,10 +794,9 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Edit Service Modal */}
       {editingService && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4">
-          <div className="bg-[#111] w-full max-w-md rounded-t-2xl p-6">
+          <div className="bg-neutral-900 w-full max-w-md rounded-t-2xl p-6">
             <h3 className="text-lg font-medium mb-4">{editingService.name}</h3>
             <div className="mb-4">
               <label className="block text-white/40 text-xs mb-2">CENA (RSD)</label>
@@ -847,8 +834,15 @@ export default function Dashboard() {
           scrollbar-width: none;
         }
         select option {
-          background: #111;
+          background: #171717;
           color: white;
+        }
+        .animate-slide-down {
+          animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>
