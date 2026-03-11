@@ -3,37 +3,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, STORAGE_URL, getLogoUrl, getBarberImageUrl, getBackgroundImageUrl } from '@/lib/supabase'
 
-// Static data (will be replaced with Supabase data later)
-const SALONS = [
-  {
-    id: 1,
-    name: 'Tension Barber I',
-    address: 'Bulevar kralja Petra I 85',
-    fullName: 'Tension Barber I - Bulevar kralja Petra I 85',
-    slug: 'bulevar-kralja-petra',
-    image: 'shop.jpeg',
-    barbers: [
-      { id: 1, name: 'Crni', slug: 'crni' },
-      { id: 2, name: 'Kole', slug: 'kole' },
-      { id: 3, name: 'Anđelo', slug: 'andjelo' },
-    ]
-  },
-  {
-    id: 2,
-    name: 'Tension Barber II',
-    address: 'Bulevar patrijarha Pavla 117',
-    fullName: 'Tension Barber II - Bulevar patrijarha Pavla 117',
-    slug: 'bulevar-patrijarha-pavla',
-    image: 'shop2.jpeg',
-    barbers: [
-      { id: 4, name: 'Rade', slug: 'rade' },
-      { id: 5, name: 'Milan', slug: 'milan' },
-      { id: 6, name: 'Filip', slug: 'filip' },
-      { id: 7, name: 'Manča', slug: 'manca' },
-    ]
-  }
-]
-
 const HERO_IMAGES = [
   'IMG_8161.jpeg',
   'IMG_4953.jpeg',
@@ -44,25 +13,6 @@ const HERO_IMAGES = [
   'IMG_8166.jpeg',
   'IMG_4955.jpeg',
   'IMG_8169.jpeg',
-]
-
-const SERVICES = [
-  { id: 1, name: 'Šišanje "Fejd"', price: 1200 },
-  { id: 2, name: 'Šišanje duža kosa', price: 1500 },
-  { id: 3, name: 'Šišanje zatvorski', price: 800 },
-  { id: 4, name: 'Brijanje glave britvom', price: 800 },
-  { id: 5, name: 'Trimovanje i konture brade', price: 600 },
-  { id: 6, name: 'Konture brade', price: 350 },
-  { id: 7, name: 'Oblikovanje obrva koncem', price: 400 },
-  { id: 8, name: 'Oblikovanje obrva britvom', price: 300 },
-  { id: 9, name: 'Pranje kose', price: 350 },
-  { id: 10, name: 'Vosak uši', price: 300 },
-  { id: 11, name: 'Vosak nos', price: 300 },
-  { id: 12, name: 'Farbanje kose', price: null },
-  { id: 13, name: 'Farbanje brade', price: null },
-  { id: 14, name: 'Tension Full Paket', price: 3000 },
-  { id: 15, name: '"Vanredno" šišanje', price: 1500 },
-  { id: 16, name: 'Tension All Inclusive', price: 3500 },
 ]
 
 // Generate dates for next 2 weeks
@@ -87,21 +37,6 @@ function generateDates() {
   return dates
 }
 
-// Generate time slots (mock - will be replaced with real availability)
-function generateTimeSlots(barberId) {
-  const slots = []
-  const seed = barberId * 7
-  for (let hour = 9; hour <= 22; hour++) {
-    if ((hour + seed) % 3 !== 0) {
-      slots.push(`${hour.toString().padStart(2, '0')}:00`)
-    }
-    if (hour < 22 && (hour + seed) % 4 !== 0) {
-      slots.push(`${hour.toString().padStart(2, '0')}:30`)
-    }
-  }
-  return slots.slice(0, 10)
-}
-
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [preloaderFading, setPreloaderFading] = useState(false)
@@ -118,7 +53,141 @@ export default function Home() {
   const [showNavbar, setShowNavbar] = useState(true)
   const [confirmedBooking, setConfirmedBooking] = useState(null)
   
+  // Real data from Supabase
+  const [locations, setLocations] = useState([])
+  const [barbers, setBarbers] = useState([])
+  const [services, setServices] = useState([])
+  const [availableSlots, setAvailableSlots] = useState({}) // { barber_id: [slots] }
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  
   const dates = generateDates()
+
+  // Load locations, barbers, and services from Supabase
+  useEffect(() => {
+    loadInitialData()
+  }, [])
+
+  const loadInitialData = async () => {
+    // Load locations
+    const { data: locationsData } = await supabase
+      .from('locations')
+      .select('*')
+      .order('id')
+    
+    if (locationsData) {
+      setLocations(locationsData.map(loc => ({
+        id: loc.id,
+        name: loc.name.includes('Petra') ? 'Tension Barber I' : 'Tension Barber II',
+        address: loc.name.replace('Tension Barber - ', ''),
+        fullName: loc.name,
+        slug: loc.name.includes('Petra') ? 'bulevar-kralja-petra' : 'bulevar-patrijarha-pavla',
+        image: loc.name.includes('Petra') ? 'shop.jpeg' : 'shop2.jpeg',
+      })))
+    }
+
+    // Load barbers with their location
+    const { data: barbersData } = await supabase
+      .from('barbers')
+      .select('*, locations(id, name)')
+      .order('name')
+    
+    if (barbersData) {
+      setBarbers(barbersData.map(b => ({
+        id: b.id,
+        name: b.name,
+        slug: b.name.toLowerCase()
+          .replace(/đ/g, 'dj')
+          .replace(/č/g, 'c')
+          .replace(/ć/g, 'c')
+          .replace(/š/g, 's')
+          .replace(/ž/g, 'z')
+          .replace(/[^a-z]/g, ''),
+        location_id: b.location_id,
+        image_url: b.image_url
+      })))
+    }
+
+    // Load services
+    const { data: servicesData } = await supabase
+      .from('services')
+      .select('*')
+      .order('price')
+    
+    if (servicesData) {
+      setServices(servicesData)
+    }
+  }
+
+  // Load available slots when date or salon changes
+  useEffect(() => {
+    if (selectedDate && selectedSalon) {
+      loadAvailableSlots()
+    }
+  }, [selectedDate, selectedSalon])
+
+  const loadAvailableSlots = async () => {
+    if (!selectedDate || !selectedSalon) return
+    
+    setLoadingSlots(true)
+    
+    // Get barbers for this location
+    const salonBarbers = barbers.filter(b => b.location_id === selectedSalon.id)
+    const barberIds = salonBarbers.map(b => b.id)
+    
+    // Fetch available slots for all barbers at this location for this date
+    const { data: slots } = await supabase
+      .from('barber_available_slots')
+      .select('*')
+      .in('barber_id', barberIds)
+      .eq('slot_date', selectedDate.iso)
+      .eq('is_booked', false)
+      .order('slot_time')
+    
+    // Group slots by barber
+    const slotsByBarber = {}
+    if (slots) {
+      slots.forEach(slot => {
+        if (!slotsByBarber[slot.barber_id]) {
+          slotsByBarber[slot.barber_id] = []
+        }
+        slotsByBarber[slot.barber_id].push(slot.slot_time.slice(0, 5))
+      })
+    }
+    
+    setAvailableSlots(slotsByBarber)
+    setLoadingSlots(false)
+  }
+
+  // Real-time subscription for slot changes
+  useEffect(() => {
+    if (!selectedDate || !selectedSalon) return
+
+    const salonBarbers = barbers.filter(b => b.location_id === selectedSalon.id)
+    const barberIds = salonBarbers.map(b => b.id)
+    
+    // Subscribe to changes in barber_available_slots
+    const channel = supabase
+      .channel('slots-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'barber_available_slots',
+          filter: `slot_date=eq.${selectedDate.iso}`
+        },
+        (payload) => {
+          console.log('Slot change:', payload)
+          // Reload slots when any change happens
+          loadAvailableSlots()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [selectedDate, selectedSalon, barbers])
 
   // Preload critical images
   useEffect(() => {
@@ -129,10 +198,7 @@ export default function Home() {
       }, 1000)
     }
 
-    // Simple approach: wait for minimum time, then hide
-    // This ensures pulse animation plays and gives time for images to load
     const timer = setTimeout(hidePreloader, 2500)
-
     return () => clearTimeout(timer)
   }, [])
 
@@ -161,7 +227,6 @@ export default function Home() {
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY
-      // Only show navbar when at the very top
       if (currentScrollY < 10) {
         setShowNavbar(true)
       } else {
@@ -177,7 +242,7 @@ export default function Home() {
     setTimeout(() => {
       const element = document.getElementById(id)
       if (element) {
-        const offset = 20 // Small offset from top
+        const offset = 20
         const elementPosition = element.getBoundingClientRect().top + window.pageYOffset
         window.scrollTo({
           top: elementPosition - offset,
@@ -199,59 +264,92 @@ export default function Home() {
     setIsSubmitting(true)
 
     try {
-      // Insert appointment into Supabase
-      const { data, error } = await supabase
-        .from('appointments')
-        .insert([
-          {
-            barber_id: selectedBarber.id,
-            service_name: selectedService.name,
-            service_price: selectedService.price,
-            customer_name: form.name,
-            customer_email: form.email,
-            customer_phone: form.phone,
-            customer_birthday: form.birthday || null,
-            appointment_date: selectedDate.iso,
-            appointment_time: selectedTime,
-            duration_minutes: 30,
-            status: 'confirmed'
-          }
-        ])
-
-      if (error) throw error
-
-      // Save customer data to localStorage for next time
+      // Save customer data to localStorage
       localStorage.setItem('tensionBarberCustomer', JSON.stringify(form))
 
-      // Save booking info for confirmation display
+      // Create appointment in Supabase
+      const { data: appointment, error: appointmentError } = await supabase
+        .from('appointments')
+        .insert({
+          barber_id: selectedBarber.id,
+          customer_name: form.name,
+          customer_email: form.email,
+          customer_phone: form.phone,
+          customer_birthday: form.birthday || null,
+          service_name: selectedService.name,
+          service_price: selectedService.price,
+          appointment_date: selectedDate.iso,
+          appointment_time: selectedTime + ':00',
+          status: 'confirmed'
+        })
+        .select()
+        .single()
+
+      if (appointmentError) {
+        console.error('Error creating appointment:', appointmentError)
+        alert('Došlo je do greške. Pokušajte ponovo.')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Mark the slot as booked
+      const { error: slotError } = await supabase
+        .from('barber_available_slots')
+        .update({ is_booked: true })
+        .eq('barber_id', selectedBarber.id)
+        .eq('slot_date', selectedDate.iso)
+        .eq('slot_time', selectedTime + ':00')
+
+      if (slotError) {
+        console.error('Error updating slot:', slotError)
+      }
+
+      // Remove the booked slot from available slots
+      setAvailableSlots(prev => ({
+        ...prev,
+        [selectedBarber.id]: prev[selectedBarber.id]?.filter(t => t !== selectedTime) || []
+      }))
+
+      // Show confirmation
       setConfirmedBooking({
         service: selectedService,
         barber: selectedBarber,
         date: selectedDate,
         time: selectedTime
       })
-
-      // Success
+      
       setShowForm(false)
       setShowConfirm(true)
-      setSelectedService(null)
-      // Don't reset form - keep data for next booking
       
+      // Hide confirmation after 5 seconds
       setTimeout(() => {
         setShowConfirm(false)
         setConfirmedBooking(null)
-        setSelectedSalon(null)
-        setSelectedDate(null)
-        setSelectedBarber(null)
-        setSelectedTime(null)
       }, 5000)
 
-    } catch (error) {
-      console.error('Booking error:', error)
+      // Reset selection
+      setSelectedBarber(null)
+      setSelectedTime(null)
+      setSelectedService(null)
+
+    } catch (err) {
+      console.error('Booking error:', err)
       alert('Došlo je do greške. Pokušajte ponovo.')
-    } finally {
-      setIsSubmitting(false)
     }
+    
+    setIsSubmitting(false)
+  }
+
+  // Get barbers for current salon
+  const getSalonBarbers = () => {
+    if (!selectedSalon) return []
+    return barbers.filter(b => b.location_id === selectedSalon.id)
+  }
+
+  // Get barber image URL
+  const getBarberImage = (barber) => {
+    if (barber.image_url) return barber.image_url
+    return `${STORAGE_URL}/barbers/${barber.slug}.jpeg`
   }
 
   return (
@@ -259,250 +357,240 @@ export default function Home() {
       
       {/* ==================== PRELOADER ==================== */}
       {isLoading && (
-        <div className={`fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center transition-opacity duration-1000 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
-          <img 
-            src={getLogoUrl('white')} 
-            alt="Tension Barber" 
-            className="w-60 md:w-72 lg:w-80 animate-pulse-logo mt-1 md:-mt-8"
-          />
+        <div className={`fixed inset-0 z-[100] bg-black flex items-center justify-center transition-opacity duration-1000 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
+          <div className="text-center">
+            <img 
+              src={getLogoUrl('white')} 
+              alt="Tension Barber" 
+              className="h-20 md:h-28 mx-auto animate-pulse"
+            />
+            <div className="mt-8 flex justify-center">
+              <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* ==================== NAVBAR ==================== */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ${showNavbar ? 'translate-y-0' : '-translate-y-full'}`}>
-        <div className="bg-gradient-to-b from-black via-black/80 to-transparent pt-5 pb-12 px-6">
-          <h1 className="text-center text-xl md:text-2xl font-light tracking-[0.2em]">TENSION BARBER</h1>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${showNavbar ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
+        <div className="bg-gradient-to-b from-black/90 via-black/60 to-transparent">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <img 
+                src={getLogoUrl('white')} 
+                alt="Tension Barber" 
+                className="h-8 md:h-10"
+              />
+              <div className="flex gap-6 text-sm text-gray-300">
+                <button onClick={() => scrollToSection('booking')} className="hover:text-white transition hidden md:block">
+                  REZERVIŠI
+                </button>
+                <button onClick={() => scrollToSection('cenovnik')} className="hover:text-white transition hidden md:block">
+                  CENOVNIK
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </nav>
-      
-      {/* ==================== HERO SECTION ==================== */}
-      <section className="hero-section">
-        {/* Background Slides */}
-        {HERO_IMAGES.map((img, i) => (
-          <div
-            key={i}
-            className={`slide ${currentSlide === i ? 'active' : ''}`}
-            style={{ backgroundImage: `url(${getBackgroundImageUrl(img)})` }}
-          />
-        ))}
+
+      {/* ==================== HERO SLIDER ==================== */}
+      <section className="relative h-screen">
+        <div className="absolute inset-0">
+          {HERO_IMAGES.map((img, i) => (
+            <div 
+              key={i}
+              className={`absolute inset-0 transition-opacity duration-1000 ${i === currentSlide ? 'opacity-100' : 'opacity-0'}`}
+            >
+              <img 
+                src={getBackgroundImageUrl(img)} 
+                alt="" 
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/50" />
+            </div>
+          ))}
+        </div>
         
-        {/* Overlay */}
-        <div className="overlay" />
-        
-        {/* Content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-4">
+        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
           <img 
             src={getLogoUrl('white')} 
             alt="Tension Barber" 
-            className="w-60 md:w-72 lg:w-80"
+            className="h-28 md:h-40 mb-6"
           />
-          <p className="text-gray-400 text-xs tracking-[0.3em] mt-4">MUŠKI FRIZERSKI SALON</p>
+          <p className="text-gray-300 text-sm tracking-[0.3em] mb-10">NOVI SAD</p>
+          <button 
+            onClick={() => scrollToSection('booking')}
+            className="bg-white text-black px-10 py-4 text-sm tracking-widest hover:bg-gray-200 transition"
+          >
+            REZERVIŠI TERMIN
+          </button>
         </div>
-        
-        {/* Slide Indicators & Scroll */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-4">
-          <div className="flex gap-2">
-            {HERO_IMAGES.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentSlide(i)}
-                className={`slide-dot ${currentSlide === i ? 'active' : ''}`}
-                aria-label={`Slide ${i + 1}`}
-              />
-            ))}
-          </div>
-          <div className="text-gray-500 text-xs tracking-[0.2em] flex flex-col items-center">
-            <span>SKROLUJ</span>
-            <svg className="w-4 h-4 mt-1 animate-bounce-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-            </svg>
-          </div>
+
+        {/* Slide indicators */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex gap-2">
+          {HERO_IMAGES.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentSlide(i)}
+              className={`w-2 h-2 rounded-full transition ${i === currentSlide ? 'bg-white' : 'bg-white/30'}`}
+            />
+          ))}
         </div>
       </section>
 
-      {/* ==================== SALON SELECTION ==================== */}
-      <section id="salon-section" className="py-20 px-4 bg-black">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-center text-xl md:text-2xl font-light tracking-[0.2em] mb-2">IZABERI SALON</h2>
-          <p className="text-center text-gray-500 text-sm mb-12">Odaberi lokaciju za zakazivanje</p>
+      {/* ==================== BOOKING SECTION ==================== */}
+      <section id="booking" className="py-20 px-4 bg-zinc-950">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-center text-xl md:text-2xl font-light tracking-[0.2em] mb-16">REZERVACIJA</h2>
           
-          <div className="grid md:grid-cols-2 gap-8">
-            {SALONS.map((salon) => (
-              <button
-                key={salon.id}
-                onClick={() => {
-                  setSelectedSalon(salon)
-                  setSelectedDate(null)
-                  setSelectedBarber(null)
-                  setSelectedTime(null)
-                  scrollToSection('date-section')
-                }}
-                className={`group relative overflow-hidden rounded-lg border border-zinc-800 transition-all duration-300 hover:border-white ${selectedSalon?.id === salon.id ? 'border-white' : ''}`}
-              >
-                {/* Background Image */}
-                <div className="aspect-[16/10] w-full">
-                  <img 
-                    src={`${STORAGE_URL}/shops/${salon.image}`}
-                    alt={salon.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                </div>
-                
-                {/* Overlay gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
-                
-                {/* Content */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 text-left">
-                  <h3 className="text-2xl font-semibold">{salon.name}</h3>
-                  <p className="text-gray-300 text-sm mt-1">{salon.address}</p>
-                  <p className="text-gray-500 text-xs">Novi Sad</p>
-                  <div className="mt-4 text-xs text-gray-400 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {salon.barbers.length} berbera
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ==================== DATE SELECTION ==================== */}
-      {selectedSalon && (
-        <section id="date-section" className="py-20 px-4 bg-zinc-950">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
-              <div>
-                <h2 className="text-xl md:text-2xl font-light tracking-[0.2em]">IZABERI DATUM</h2>
-                <p className="text-gray-500 text-sm mt-1">{selectedSalon.address}, Novi Sad</p>
-              </div>
-              <button 
-                onClick={() => {
-                  setSelectedSalon(null)
-                  setSelectedDate(null)
-                  setSelectedBarber(null)
-                  setSelectedTime(null)
-                  scrollToSection('salon-section')
-                }} 
-                className="text-gray-500 text-sm underline underline-offset-4 hover:text-white transition"
-              >
-                ← Promeni salon
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-7 gap-2">
-              {dates.map((date, i) => (
+          {/* Step 1: Choose Location */}
+          <div className="mb-16">
+            <p className="text-center text-gray-500 text-sm mb-6 tracking-wider">1. IZABERITE LOKACIJU</p>
+            <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+              {locations.map((salon) => (
                 <button
-                  key={i}
+                  key={salon.id}
                   onClick={() => {
-                    setSelectedDate(date)
-                    setSelectedBarber(null)
-                    setSelectedTime(null)
-                    scrollToSection('barber-section')
+                    setSelectedSalon(salon)
+                    setSelectedDate(null)
+                    setAvailableSlots({})
+                    scrollToSection('date-picker')
                   }}
-                  className={`date-btn p-3 rounded text-center ${selectedDate?.iso === date.iso ? 'selected' : ''}`}
+                  className={`relative overflow-hidden rounded-lg aspect-[4/3] group ${
+                    selectedSalon?.id === salon.id ? 'ring-2 ring-white' : ''
+                  }`}
                 >
-                  <div className="text-xs opacity-60">{date.day}</div>
-                  <div className="text-lg font-semibold">{date.dayNum}</div>
-                  <div className="text-xs opacity-40">{date.month}.</div>
+                  <img 
+                    src={getBackgroundImageUrl(salon.image)} 
+                    alt={salon.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
+                  />
+                  <div className="absolute inset-0 bg-black/60 group-hover:bg-black/50 transition" />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <h3 className="text-lg md:text-xl font-semibold mb-2">{salon.name}</h3>
+                    <p className="text-gray-400 text-sm">{salon.address}</p>
+                  </div>
                 </button>
               ))}
             </div>
           </div>
-        </section>
-      )}
 
-      {/* ==================== BARBER SELECTION ==================== */}
-      {selectedDate && (
-        <section id="barber-section" className="py-20 px-4 bg-black">
-          <div className="max-w-5xl mx-auto">
-            <h2 className="text-xl md:text-2xl font-light tracking-[0.2em] mb-2">IZABERI BERBERA I TERMIN</h2>
-            <p className="text-gray-500 text-sm mb-12">{selectedDate.day}, {selectedDate.formatted}</p>
-            
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {selectedSalon.barbers.map((barber) => {
-                const timeSlots = generateTimeSlots(barber.id)
-                return (
-                  <div key={barber.id} className="bg-zinc-900 rounded-lg overflow-hidden">
-                    {/* Barber Photo */}
-                    <div className="aspect-square bg-zinc-800 relative">
-                      <img
-                        src={getBarberImageUrl(barber.slug)}
-                        alt={barber.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.src = `https://ui-avatars.com/api/?name=${barber.name}&background=222&color=fff&size=400`
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                      <h3 className="absolute bottom-4 left-4 text-xl font-semibold">{barber.name}</h3>
-                    </div>
-                    
-                    {/* Time Slots */}
-                    <div className="p-4">
-                      <p className="text-xs text-gray-500 mb-3 tracking-wider">SLOBODNI TERMINI</p>
-                      <div className="grid grid-cols-4 gap-2">
-                        {timeSlots.slice(0, 8).map((time, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              setSelectedBarber(barber)
-                              setSelectedTime(time)
-                              setShowForm(true)
-                            }}
-                            className="time-btn py-2 text-xs rounded"
-                          >
-                            {time}
-                          </button>
-                        ))}
-                      </div>
-                      {timeSlots.length > 8 && (
-                        <p className="text-xs text-gray-600 mt-3 text-center">
-                          + još {timeSlots.length - 8} termina
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+          {/* Step 2: Choose Date */}
+          {selectedSalon && (
+            <div id="date-picker" className="mb-16 animate-fade-in">
+              <p className="text-center text-gray-500 text-sm mb-6 tracking-wider">2. IZABERITE DATUM</p>
+              <div className="flex gap-3 overflow-x-auto pb-4 justify-start md:justify-center scrollbar-hide">
+                {dates.map((date, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setSelectedDate(date)
+                      scrollToSection('barbers')
+                    }}
+                    disabled={date.day === 'Ned'}
+                    className={`flex-shrink-0 w-16 py-3 rounded-lg text-center transition ${
+                      date.day === 'Ned' 
+                        ? 'bg-zinc-900 text-zinc-700 cursor-not-allowed' 
+                        : selectedDate?.iso === date.iso 
+                          ? 'bg-white text-black' 
+                          : 'bg-zinc-900 text-white hover:bg-zinc-800'
+                    }`}
+                  >
+                    <p className="text-xs text-inherit opacity-60">{date.day}</p>
+                    <p className="text-lg font-semibold">{date.dayNum}</p>
+                    <p className="text-xs text-inherit opacity-60">{date.month}/{date.year.toString().slice(2)}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
-      )}
+          )}
+
+          {/* Step 3: Choose Barber & Time */}
+          {selectedSalon && selectedDate && (
+            <div id="barbers" className="animate-fade-in">
+              <p className="text-center text-gray-500 text-sm mb-2 tracking-wider">3. IZABERITE BERBERA I TERMIN</p>
+              <p className="text-center text-gray-600 text-xs mb-8">{selectedDate.day}, {selectedDate.formatted}</p>
+              
+              {loadingSlots ? (
+                <div className="text-center py-12">
+                  <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto"></div>
+                  <p className="text-gray-500 mt-4">Učitavanje termina...</p>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {getSalonBarbers().map((barber) => {
+                    const slots = availableSlots[barber.id] || []
+                    return (
+                      <div key={barber.id} className="bg-zinc-900 rounded-lg overflow-hidden">
+                        {/* Barber Photo */}
+                        <div className="aspect-square bg-zinc-800 relative">
+                          <img
+                            src={getBarberImage(barber)}
+                            alt={barber.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.src = `https://ui-avatars.com/api/?name=${barber.name}&background=222&color=fff&size=400`
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                          <h3 className="absolute bottom-4 left-4 text-xl font-semibold">{barber.name}</h3>
+                        </div>
+                        
+                        {/* Time Slots */}
+                        <div className="p-4">
+                          <p className="text-xs text-gray-500 mb-3 tracking-wider">SLOBODNI TERMINI</p>
+                          {slots.length === 0 ? (
+                            <p className="text-gray-600 text-sm text-center py-4">Nema slobodnih termina</p>
+                          ) : (
+                            <>
+                              <div className="grid grid-cols-4 gap-2">
+                                {slots.slice(0, 8).map((time, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => {
+                                      setSelectedBarber(barber)
+                                      setSelectedTime(time)
+                                      setShowForm(true)
+                                    }}
+                                    className="time-btn py-2 text-xs rounded bg-zinc-800 hover:bg-white hover:text-black transition"
+                                  >
+                                    {time}
+                                  </button>
+                                ))}
+                              </div>
+                              {slots.length > 8 && (
+                                <p className="text-xs text-gray-600 mt-3 text-center">
+                                  + još {slots.length - 8} termina
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* ==================== CENOVNIK ==================== */}
-      <section className="py-20 px-4 bg-black">
+      <section id="cenovnik" className="py-20 px-4 bg-black">
         <div className="max-w-2xl mx-auto">
           <h2 className="text-center text-xl md:text-2xl font-light tracking-[0.2em] mb-12">CENOVNIK</h2>
           
           <div className="space-y-0">
-            {[
-              { service: 'ŠIŠANJE "FEJD"', price: '1.200' },
-              { service: 'ŠIŠANJE DUŽA KOSA', price: '1.500' },
-              { service: 'ŠIŠANJE ZATVORSKI', price: '800' },
-              { service: 'BRIJANJE GLAVE BRITVOM', price: '800' },
-              { service: 'TRIMOVANJE I KONTURE BRADE', price: '600' },
-              { service: 'KONTURE BRADE', price: '350' },
-              { service: 'OBLIKOVANJE OBRVA KONCEM', price: '400' },
-              { service: 'OBLIKOVANJE OBRVA BRITVOM', price: '300' },
-              { service: 'PRANJE KOSE', price: '350' },
-              { service: 'VOSAK UŠI', price: '300' },
-              { service: 'VOSAK NOS', price: '300' },
-              { service: 'FARBANJE KOSE', price: '***' },
-              { service: 'FARBANJE BRADE', price: '***' },
-              { service: 'TENSION FULL PAKET', price: '3.000' },
-              { service: '"VANREDNO" ŠIŠANJE', price: '1.500' },
-              { service: 'TENSION ALL INCLUSIVE', price: '3.500' },
-            ].map((item, i) => (
+            {services.map((service, i) => (
               <div 
-                key={i} 
+                key={service.id || i} 
                 className="flex justify-between items-center py-4 border-b border-zinc-800"
               >
-                <span className="text-sm md:text-base text-gray-300">{item.service}</span>
+                <span className="text-sm md:text-base text-gray-300">{service.name?.toUpperCase()}</span>
                 <span className="text-sm md:text-base text-white font-medium">
-                  {item.price === '***' ? '***' : `${item.price} RSD`}
+                  {service.price ? `${service.price.toLocaleString()} RSD` : '***'}
                 </span>
               </div>
             ))}
@@ -626,12 +714,12 @@ export default function Home() {
                   className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer"
                   value={selectedService?.id || ''}
                   onChange={(e) => {
-                    const service = SERVICES.find(s => s.id === parseInt(e.target.value))
+                    const service = services.find(s => s.id === e.target.value)
                     setSelectedService(service)
                   }}
                 >
                   <option value="">-- Izaberite uslugu --</option>
-                  {SERVICES.map((service) => (
+                  {services.map((service) => (
                     <option key={service.id} value={service.id}>
                       {service.name} {service.price ? `- ${service.price.toLocaleString()} RSD` : '- cena po dogovoru'}
                     </option>
@@ -716,6 +804,34 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <style jsx global>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.3s ease-out;
+        }
+        .animate-slide-up {
+          animation: slideUp 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        select option {
+          background: #000;
+          color: white;
+        }
+      `}</style>
     </main>
   )
 }
