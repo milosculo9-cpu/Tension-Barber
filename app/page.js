@@ -3,37 +3,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, STORAGE_URL, getLogoUrl, getBarberImageUrl, getBackgroundImageUrl } from '@/lib/supabase'
 
-// Static data (will be replaced with Supabase data later)
-const SALONS = [
-  {
-    id: 1,
-    name: 'Tension Barber I',
-    address: 'Bulevar kralja Petra I 85',
-    fullName: 'Tension Barber I - Bulevar kralja Petra I 85',
-    slug: 'bulevar-kralja-petra',
-    image: 'shop.jpeg',
-    barbers: [
-      { id: 1, name: 'Crni', slug: 'crni' },
-      { id: 2, name: 'Kole', slug: 'kole' },
-      { id: 3, name: 'Anđelo', slug: 'andjelo' },
-    ]
-  },
-  {
-    id: 2,
-    name: 'Tension Barber II',
-    address: 'Bulevar patrijarha Pavla 117',
-    fullName: 'Tension Barber II - Bulevar patrijarha Pavla 117',
-    slug: 'bulevar-patrijarha-pavla',
-    image: 'shop2.jpeg',
-    barbers: [
-      { id: 4, name: 'Rade', slug: 'rade' },
-      { id: 5, name: 'Milan', slug: 'milan' },
-      { id: 6, name: 'Filip', slug: 'filip' },
-      { id: 7, name: 'Manča', slug: 'manca' },
-    ]
-  }
-]
-
 const HERO_IMAGES = [
   'IMG_8161.jpeg',
   'IMG_4953.jpeg',
@@ -103,11 +72,63 @@ export default function Home() {
   const [showNavbar, setShowNavbar] = useState(true)
   const [confirmedBooking, setConfirmedBooking] = useState(null)
   
-  // Real-time slots state
-  const [availableSlots, setAvailableSlots] = useState({}) // { barber_id: [time strings] }
+  // Dynamic data from database
+  const [salons, setSalons] = useState([])
+  const [availableSlots, setAvailableSlots] = useState({})
   const [loadingSlots, setLoadingSlots] = useState(false)
   
   const dates = generateDates()
+
+  // Load salons and barbers from database on mount
+  useEffect(() => {
+    loadSalonsAndBarbers()
+  }, [])
+
+  const loadSalonsAndBarbers = async () => {
+    // Load locations
+    const { data: locations } = await supabase
+      .from('locations')
+      .select('*')
+      .order('id')
+
+    // Load barbers with their locations
+    const { data: barbers } = await supabase
+      .from('barbers')
+      .select('*')
+      .order('name')
+
+    if (locations && barbers) {
+      const salonsData = locations.map(loc => {
+        const isLoc1 = loc.name.includes('Petra')
+        const locationBarbers = barbers
+          .filter(b => b.location_id === loc.id)
+          .map(b => ({
+            id: b.id,
+            name: b.name,
+            slug: b.name.toLowerCase()
+              .replace(/đ/g, 'dj')
+              .replace(/č/g, 'c')
+              .replace(/ć/g, 'c')
+              .replace(/š/g, 's')
+              .replace(/ž/g, 'z')
+              .replace(/[^a-z]/g, ''),
+            image_url: b.image_url
+          }))
+
+        return {
+          id: loc.id,
+          name: isLoc1 ? 'Tension Barber I' : 'Tension Barber II',
+          address: isLoc1 ? 'Bulevar kralja Petra I 85' : 'Bulevar patrijarha Pavla 117',
+          fullName: loc.name,
+          slug: isLoc1 ? 'bulevar-kralja-petra' : 'bulevar-patrijarha-pavla',
+          image: isLoc1 ? 'shop.jpeg' : 'shop2.jpeg',
+          barbers: locationBarbers
+        }
+      })
+
+      setSalons(salonsData)
+    }
+  }
 
   // Load available slots when date or salon changes
   useEffect(() => {
@@ -179,10 +200,7 @@ export default function Home() {
       }, 1000)
     }
 
-    // Simple approach: wait for minimum time, then hide
-    // This ensures pulse animation plays and gives time for images to load
     const timer = setTimeout(hidePreloader, 2500)
-
     return () => clearTimeout(timer)
   }, [])
 
@@ -211,7 +229,6 @@ export default function Home() {
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY
-      // Only show navbar when at the very top
       if (currentScrollY < 10) {
         setShowNavbar(true)
       } else {
@@ -227,7 +244,7 @@ export default function Home() {
     setTimeout(() => {
       const element = document.getElementById(id)
       if (element) {
-        const offset = 20 // Small offset from top
+        const offset = 20
         const elementPosition = element.getBoundingClientRect().top + window.pageYOffset
         window.scrollTo({
           top: elementPosition - offset,
@@ -249,7 +266,6 @@ export default function Home() {
     setIsSubmitting(true)
 
     try {
-      // Insert appointment into Supabase
       const { data, error } = await supabase
         .from('appointments')
         .insert([
@@ -284,10 +300,8 @@ export default function Home() {
         [selectedBarber.id]: prev[selectedBarber.id]?.filter(t => t !== selectedTime) || []
       }))
 
-      // Save customer data to localStorage for next time
       localStorage.setItem('tensionBarberCustomer', JSON.stringify(form))
 
-      // Save booking info for confirmation display
       setConfirmedBooking({
         service: selectedService,
         barber: selectedBarber,
@@ -295,11 +309,9 @@ export default function Home() {
         time: selectedTime
       })
 
-      // Success
       setShowForm(false)
       setShowConfirm(true)
       setSelectedService(null)
-      // Don't reset form - keep data for next booking
       
       setTimeout(() => {
         setShowConfirm(false)
@@ -318,9 +330,13 @@ export default function Home() {
     }
   }
 
-  // Get time slots for a barber (from real data)
   const getTimeSlots = (barberId) => {
     return availableSlots[barberId] || []
+  }
+
+  const getBarberImage = (barber) => {
+    if (barber.image_url) return barber.image_url
+    return getBarberImageUrl(barber.slug)
   }
 
   return (
@@ -346,7 +362,6 @@ export default function Home() {
       
       {/* ==================== HERO SECTION ==================== */}
       <section className="hero-section">
-        {/* Background Slides */}
         {HERO_IMAGES.map((img, i) => (
           <div
             key={i}
@@ -355,10 +370,8 @@ export default function Home() {
           />
         ))}
         
-        {/* Overlay */}
         <div className="overlay" />
         
-        {/* Content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-4">
           <img 
             src={getLogoUrl('white')} 
@@ -368,7 +381,6 @@ export default function Home() {
           <p className="text-gray-400 text-xs tracking-[0.3em] mt-4">MUŠKI FRIZERSKI SALON</p>
         </div>
         
-        {/* Slide Indicators & Scroll */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-4">
           <div className="flex gap-2">
             {HERO_IMAGES.map((_, i) => (
@@ -396,7 +408,7 @@ export default function Home() {
           <p className="text-center text-gray-500 text-sm mb-12">Odaberi lokaciju za zakazivanje</p>
           
           <div className="grid md:grid-cols-2 gap-8">
-            {SALONS.map((salon) => (
+            {salons.map((salon) => (
               <button
                 key={salon.id}
                 onClick={() => {
@@ -408,7 +420,6 @@ export default function Home() {
                 }}
                 className={`group relative overflow-hidden rounded-lg border border-zinc-800 transition-all duration-300 hover:border-white ${selectedSalon?.id === salon.id ? 'border-white' : ''}`}
               >
-                {/* Background Image */}
                 <div className="aspect-[16/10] w-full">
                   <img 
                     src={`${STORAGE_URL}/shops/${salon.image}`}
@@ -417,10 +428,8 @@ export default function Home() {
                   />
                 </div>
                 
-                {/* Overlay gradient */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
                 
-                {/* Content */}
                 <div className="absolute bottom-0 left-0 right-0 p-6 text-left">
                   <h3 className="text-2xl font-semibold">{salon.name}</h3>
                   <p className="text-gray-300 text-sm mt-1">{salon.address}</p>
@@ -501,10 +510,9 @@ export default function Home() {
                   const timeSlots = getTimeSlots(barber.id)
                   return (
                     <div key={barber.id} className="bg-zinc-900 rounded-lg overflow-hidden">
-                      {/* Barber Photo */}
                       <div className="aspect-square bg-zinc-800 relative">
                         <img
-                          src={getBarberImageUrl(barber.slug)}
+                          src={getBarberImage(barber)}
                           alt={barber.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
@@ -515,7 +523,6 @@ export default function Home() {
                         <h3 className="absolute bottom-4 left-4 text-xl font-semibold">{barber.name}</h3>
                       </div>
                       
-                      {/* Time Slots */}
                       <div className="p-4">
                         <p className="text-xs text-gray-500 mb-3 tracking-wider">SLOBODNI TERMINI</p>
                         {timeSlots.length === 0 ? (
@@ -600,7 +607,6 @@ export default function Home() {
           <h2 className="text-center text-xl md:text-2xl font-light tracking-[0.2em] mb-16">O NAMA</h2>
           
           <div className="grid md:grid-cols-3 gap-12 text-center">
-            {/* Radno vreme */}
             <div>
               <div className="w-14 h-14 mx-auto mb-5 rounded-full border border-zinc-700 flex items-center justify-center">
                 <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -624,7 +630,6 @@ export default function Home() {
               </div>
             </div>
             
-            {/* Adrese */}
             <div>
               <div className="w-14 h-14 mx-auto mb-5 rounded-full border border-zinc-700 flex items-center justify-center">
                 <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -645,7 +650,6 @@ export default function Home() {
               </div>
             </div>
             
-            {/* Kontakt */}
             <div>
               <div className="w-14 h-14 mx-auto mb-5 rounded-full border border-zinc-700 flex items-center justify-center">
                 <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
