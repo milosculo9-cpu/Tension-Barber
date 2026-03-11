@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
@@ -35,6 +36,81 @@ export default function AdminLogin() {
         .select('id, name, is_admin, location_id')
         .eq('auth_user_id', data.user.id)
         .single();
+
+      if (barberError || !barber) {
+        await supabase.auth.signOut();
+        setError('Nemate pristup admin panelu');
+        setLoading(false);
+        return;
+      }
+
+      router.push('/admin/dashboard');
+    } catch (err) {
+      setError('Došlo je do greške. Pokušajte ponovo.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="relative w-full max-w-md">
+        <div className="bg-[#0a0a0a] border border-[#222222] rounded-lg p-8 shadow-2xl">
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <img
+              src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/logo/logo.white.PNG"
+              alt="Tension Barber"
+              className="h-16 mx-auto mb-4"
+            />
+            <p className="text-white text-sm tracking-[0.3em]">ADMIN PANEL</p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm text-center">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-[#888888] text-sm mb-2 tracking-wide">EMAIL</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-black border border-[#333333] rounded px-4 py-3 text-white focus:border-white focus:outline-none transition-colors"
+                placeholder="vas@email.com"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-[#888888] text-sm mb-2 tracking-wide">LOZINKA</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-black border border-[#333333] rounded px-4 py-3 text-white focus:border-white focus:outline-none transition-colors"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-white text-black font-semibold py-3 rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              {loading ? 'PRIJAVLJIVANJE...' : 'PRIJAVI SE'}
+            </button>
+          </form>
+
+          <p className="text-center text-[#444444] text-xs mt-8">Tension Barber © 2026</p>
+        </div>
+      </div>
+    </div>
+  );
+}        .single();
 
       if (barberError || !barber) {
         await supabase.auth.signOut();
