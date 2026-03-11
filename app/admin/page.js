@@ -1,40 +1,171 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 
-const generateTimeSlots = (locationName) => {
-  const slots = [];
-  const startHour = 10;
-  const endHour = locationName?.includes('Petra') ? 18 : 22;
+export default function AdminLogin() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [preloading, setPreloading] = useState(true);
+  const [showSwipe, setShowSwipe] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   
-  for (let hour = startHour; hour < endHour; hour++) {
-    slots.push(`${hour.toString().padStart(2, '0')}:00`);
-    slots.push(`${hour.toString().padStart(2, '0')}:30`);
-  }
-  return slots;
-};
+  const touchStartY = useRef(0);
+  const router = useRouter();
+  const supabase = createClientComponentClient();
 
-const formatDate = (date) => date.toISOString().split('T')[0];
+  useEffect(() => {
+    const timer1 = setTimeout(() => {
+      setShowSwipe(true);
+    }, 1500);
+    
+    return () => clearTimeout(timer1);
+  }, []);
 
-const getNext14Days = () => {
-  const days = [];
-  const today = new Date();
-  for (let i = 0; i < 14; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    days.push(date);
-  }
-  return days;
-};
+  useEffect(() => {
+    if (!showSwipe || !preloading) return;
 
-const dayNames = ['NED', 'PON', 'UTO', 'SRE', 'CET', 'PET', 'SUB'];
-const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AVG', 'SEP', 'OKT', 'NOV', 'DEC'];
+    const handleTouchStart = (e) => {
+      touchStartY.current = e.touches[0].clientY;
+    };
 
-export default function Dashboard() {
-  const [barber, setBarber] = useState(null);
-  const [loading, setLoading] = useState(true);
+    const handleTouchEnd = (e) => {
+      const touchEndY = e.changedTouches[0].clientY;
+      const diff = touchStartY.current - touchEndY;
+      
+      if (diff > 50) {
+        handleSwipeUp();
+      }
+    };
+
+    document.addEventListener('touchstart', handleTouchStart);
+    document.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [showSwipe, preloading]);
+
+  const handleSwipeUp = () => {
+    setPreloading(false);
+    setTimeout(() => setShowForm(true), 300);
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        setError('Pogresan email ili lozinka');
+        setLoading(false);
+        return;
+      }
+
+      const { data: barber, error: barberError } = await supabase
+        .from('barbers')
+        .select('id, name, is_admin, location_id')
+        .eq('auth_user_id', data.user.id)
+        .single();
+
+      if (barberError || !barber) {
+        await supabase.auth.signOut();
+        setError('Nemate pristup admin panelu');
+        setLoading(false);
+        return;
+      }
+
+      router.push('/admin/dashboard');
+    } catch (err) {
+      setError('Doslo je do greske. Pokusajte ponovo.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 overflow-hidden">
+      
+      {preloading && (
+        <div 
+          className={`fixed inset-0 bg-black z-50 flex flex-col items-center justify-center transition-transform duration-500 ${!preloading ? '-translate-y-full' : 'translate-y-0'}`}
+        >
+          <img
+            src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/logo/logo.white.PNG"
+            alt="Tension Barber"
+            className="h-48 mb-8"
+          />
+          
+          {showSwipe && (
+            <div className="animate-bounce flex flex-col items-center text-white/50 mt-8">
+              <svg className="w-8 h-8 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              <span className="text-sm mt-2">Prevuci na gore</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={`w-full max-w-md transition-all duration-500 ${showForm ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        
+        <h1 className="text-center text-white text-2xl tracking-[0.2em] font-light mb-2">
+          TENSION BARBER
+        </h1>
+        <p className="text-center text-white/50 text-sm tracking-[0.3em] mb-12">ADMIN PANEL</p>
+
+        {error && (
+          <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm text-center">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label className="block text-white/40 text-xs mb-2 tracking-wider">EMAIL</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white focus:border-white focus:outline-none transition-colors"
+              placeholder="vas@email.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-white/40 text-xs mb-2 tracking-wider">LOZINKA</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white focus:border-white focus:outline-none transition-colors"
+              placeholder="********"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-white text-black font-medium py-4 rounded mt-8 hover:bg-white/90 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'PRIJAVLJIVANJE...' : 'PRIJAVI SE'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}  const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [availableSlots, setAvailableSlots] = useState([]);
   const [appointments, setAppointments] = useState([]);
