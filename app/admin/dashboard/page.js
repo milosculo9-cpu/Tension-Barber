@@ -57,7 +57,7 @@ export default function Dashboard() {
   
   const fileInputRef = useRef(null);
   const touchStartX = useRef(0);
-  const mainRef = useRef(null);
+  const touchStartY = useRef(0);
   const router = useRouter();
   const supabase = createClientComponentClient();
   const days = getNext14Days();
@@ -69,41 +69,49 @@ export default function Dashboard() {
     { id: 'podesavanja', label: 'Podesavanja' }
   ];
 
+  // Change tab and scroll to top
+  const changeTab = (tabId) => {
+    setActiveTab(tabId);
+    setAdminSection(null);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
   // Swipe handler for tabs
   useEffect(() => {
     const handleTouchStart = (e) => {
       touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
     };
 
     const handleTouchEnd = (e) => {
       const touchEndX = e.changedTouches[0].clientX;
-      const diff = touchStartX.current - touchEndX;
+      const touchEndY = e.changedTouches[0].clientY;
       
-      const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
-      const currentIndex = availableTabs.findIndex(t => t.id === activeTab);
+      const diffX = touchStartX.current - touchEndX;
+      const diffY = touchStartY.current - touchEndY;
       
-      if (diff > 80 && currentIndex < availableTabs.length - 1) {
-        // Swipe left - next tab
-        setActiveTab(availableTabs[currentIndex + 1].id);
-        setAdminSection(null);
-      } else if (diff < -80 && currentIndex > 0) {
-        // Swipe right - previous tab
-        setActiveTab(availableTabs[currentIndex - 1].id);
-        setAdminSection(null);
+      // Only trigger swipe if horizontal movement is much greater than vertical
+      // and the swipe is long enough (at least 100px)
+      if (Math.abs(diffX) > Math.abs(diffY) * 2 && Math.abs(diffX) > 100) {
+        const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
+        const currentIndex = availableTabs.findIndex(t => t.id === activeTab);
+        
+        if (diffX > 0 && currentIndex < availableTabs.length - 1) {
+          // Swipe left - next tab
+          changeTab(availableTabs[currentIndex + 1].id);
+        } else if (diffX < 0 && currentIndex > 0) {
+          // Swipe right - previous tab
+          changeTab(availableTabs[currentIndex - 1].id);
+        }
       }
     };
 
-    const main = mainRef.current;
-    if (main) {
-      main.addEventListener('touchstart', handleTouchStart);
-      main.addEventListener('touchend', handleTouchEnd);
-    }
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
 
     return () => {
-      if (main) {
-        main.removeEventListener('touchstart', handleTouchStart);
-        main.removeEventListener('touchend', handleTouchEnd);
-      }
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
     };
   }, [activeTab, barber]);
 
@@ -386,8 +394,8 @@ export default function Dashboard() {
         .update({ image_url: imageUrl })
         .eq('id', editingBarber.id);
       
-      loadAllBarbers();
       setEditingBarber({ ...editingBarber, image_url: imageUrl });
+      loadAllBarbers();
     }
     
     setUploadingImage(false);
@@ -425,7 +433,7 @@ export default function Dashboard() {
             {availableTabs.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setAdminSection(null); }}
+                onClick={() => changeTab(tab.id)}
                 className={`px-6 py-3 text-sm tracking-wide whitespace-nowrap transition-colors
                   ${activeTab === tab.id ? 'text-white border-b-2 border-white' : 'text-white/40'}`}
               >
@@ -436,7 +444,7 @@ export default function Dashboard() {
         </nav>
       </header>
 
-      <main ref={mainRef} className="p-4 pb-20 min-h-[60vh]">
+      <main className="p-4 pb-20 min-h-[60vh]">
         
         {activeTab === 'termini' && (
           <div className="space-y-6">
