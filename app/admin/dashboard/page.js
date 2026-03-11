@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 
+const STORAGE_URL = 'https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public';
+
 const generateTimeSlots = (locationName) => {
   const slots = [];
   const startHour = 10;
@@ -27,6 +29,25 @@ const getNext14Days = () => {
     days.push(date);
   }
   return days;
+};
+
+// Generate barber image URL based on name
+const getBarberImageUrl = (barber) => {
+  if (barber.image_url) return barber.image_url;
+  
+  // Try common patterns based on barber name
+  const name = barber.name?.toLowerCase()
+    .replace(/đ/g, 'dj')
+    .replace(/č/g, 'c')
+    .replace(/ć/g, 'c')
+    .replace(/š/g, 's')
+    .replace(/ž/g, 'z')
+    .replace(/[^a-z]/g, '');
+  
+  if (name) {
+    return `${STORAGE_URL}/barbers/${name}.jpg`;
+  }
+  return null;
 };
 
 const dayNames = ['NED', 'PON', 'UTO', 'SRE', 'CET', 'PET', 'SUB'];
@@ -73,34 +94,37 @@ export default function Dashboard() {
   const changeTab = (tabId) => {
     setActiveTab(tabId);
     setAdminSection(null);
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    // Scroll to top immediately
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
   };
 
   // Swipe handler for tabs
   useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+    
     const handleTouchStart = (e) => {
-      touchStartX.current = e.touches[0].clientX;
-      touchStartY.current = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
     };
 
     const handleTouchEnd = (e) => {
-      const touchEndX = e.changedTouches[0].clientX;
-      const touchEndY = e.changedTouches[0].clientY;
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
       
-      const diffX = touchStartX.current - touchEndX;
-      const diffY = touchStartY.current - touchEndY;
+      const diffX = startX - endX;
+      const diffY = startY - endY;
       
-      // Only trigger swipe if horizontal movement is much greater than vertical
-      // and the swipe is long enough (at least 100px)
-      if (Math.abs(diffX) > Math.abs(diffY) * 2 && Math.abs(diffX) > 100) {
+      // Only trigger if horizontal movement is dominant and significant
+      if (Math.abs(diffX) > Math.abs(diffY) * 2.5 && Math.abs(diffX) > 80) {
         const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
         const currentIndex = availableTabs.findIndex(t => t.id === activeTab);
         
         if (diffX > 0 && currentIndex < availableTabs.length - 1) {
-          // Swipe left - next tab
           changeTab(availableTabs[currentIndex + 1].id);
         } else if (diffX < 0 && currentIndex > 0) {
-          // Swipe right - previous tab
           changeTab(availableTabs[currentIndex - 1].id);
         }
       }
@@ -380,14 +404,20 @@ export default function Dashboard() {
     setUploadingImage(true);
     
     const fileExt = file.name.split('.').pop().toLowerCase();
-    const fileName = `${editingBarber.name.toLowerCase().replace(/[^a-z]/g, '')}.${fileExt}`;
+    const fileName = `${editingBarber.name.toLowerCase()
+      .replace(/đ/g, 'dj')
+      .replace(/č/g, 'c')
+      .replace(/ć/g, 'c')
+      .replace(/š/g, 's')
+      .replace(/ž/g, 'z')
+      .replace(/[^a-z]/g, '')}.${fileExt}`;
     
     const { error: uploadError } = await supabase.storage
       .from('barbers')
       .upload(fileName, file, { upsert: true });
     
     if (!uploadError) {
-      const imageUrl = `https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/barbers/${fileName}`;
+      const imageUrl = `${STORAGE_URL}/barbers/${fileName}`;
       
       await supabase
         .from('barbers')
@@ -411,6 +441,31 @@ export default function Dashboard() {
 
   const timeSlots = generateTimeSlots(barber.locations?.name);
   const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
+
+  // Image component with fallback
+  const BarberImage = ({ barber: b, size = 'md' }) => {
+    const [imgError, setImgError] = useState(false);
+    const imageUrl = getBarberImageUrl(b);
+    const sizeClass = size === 'lg' ? 'w-32 h-32' : 'w-12 h-12';
+    const iconSize = size === 'lg' ? 'text-5xl' : 'text-xl';
+    
+    if (!imageUrl || imgError) {
+      return (
+        <div className={`${sizeClass} rounded-full bg-white/10 flex items-center justify-center text-white/30 ${iconSize} ${size === 'lg' ? 'border-2 border-white/20' : ''}`}>
+          👤
+        </div>
+      );
+    }
+    
+    return (
+      <img 
+        src={imageUrl} 
+        alt={b.name} 
+        className={`${sizeClass} rounded-full object-cover ${size === 'lg' ? 'border-2 border-white/20' : ''}`}
+        onError={() => setImgError(true)}
+      />
+    );
+  };
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -640,13 +695,7 @@ export default function Dashboard() {
                           className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center"
                         >
                           <div className="flex items-center gap-3">
-                            {b.image_url ? (
-                              <img src={b.image_url} alt={b.name} className="w-12 h-12 rounded-full object-cover" />
-                            ) : (
-                              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-xl">
-                                👤
-                              </div>
-                            )}
+                            <BarberImage barber={b} size="md" />
                             <div className="text-left">
                               <span className="font-medium">{b.name}</span>
                               {b.is_admin && <span className="text-xs text-white/30 ml-2">ADMIN</span>}
@@ -703,17 +752,9 @@ export default function Dashboard() {
                     
                     {/* Barber Image - Large */}
                     <div className="flex flex-col items-center mb-6">
-                      {editingBarber.image_url ? (
-                        <img 
-                          src={editingBarber.image_url} 
-                          alt={editingBarber.name} 
-                          className="w-32 h-32 rounded-full object-cover mb-4 border-2 border-white/20" 
-                        />
-                      ) : (
-                        <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-5xl mb-4 border-2 border-white/20">
-                          👤
-                        </div>
-                      )}
+                      <div className="mb-4">
+                        <BarberImage barber={editingBarber} size="lg" />
+                      </div>
                       <input
                         ref={fileInputRef}
                         type="file"
