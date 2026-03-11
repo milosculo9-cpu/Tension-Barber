@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 
@@ -44,7 +44,18 @@ export default function Dashboard() {
   const [adminSection, setAdminSection] = useState(null);
   const [services, setServices] = useState([]);
   const [allBarbers, setAllBarbers] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [slotsLocked, setSlotsLocked] = useState(false);
   
+  const [editingService, setEditingService] = useState(null);
+  const [editingBarber, setEditingBarber] = useState(null);
+  const [showAddBarber, setShowAddBarber] = useState(false);
+  const [newBarberName, setNewBarberName] = useState('');
+  const [newBarberLocation, setNewBarberLocation] = useState('');
+  const [newServicePrice, setNewServicePrice] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  
+  const fileInputRef = useRef(null);
   const router = useRouter();
   const supabase = createClientComponentClient();
   const days = getNext14Days();
@@ -85,6 +96,7 @@ export default function Dashboard() {
     if (barberData.is_admin) {
       loadServices();
       loadAllBarbers();
+      loadLocations();
     }
     
     setLoading(false);
@@ -100,6 +112,11 @@ export default function Dashboard() {
     if (data) setAllBarbers(data);
   };
 
+  const loadLocations = async () => {
+    const { data } = await supabase.from('locations').select('*');
+    if (data) setLocations(data);
+  };
+
   const loadSlotsForDate = async () => {
     const dateStr = formatDate(selectedDate);
     
@@ -111,6 +128,8 @@ export default function Dashboard() {
 
     if (data) {
       setAvailableSlots(data.map(s => s.slot_time.slice(0, 5)));
+    } else {
+      setAvailableSlots([]);
     }
   };
 
@@ -156,6 +175,8 @@ export default function Dashboard() {
   };
 
   const toggleSlot = async (time) => {
+    if (slotsLocked) return;
+    
     setSaving(true);
     const dateStr = formatDate(selectedDate);
     
@@ -184,6 +205,8 @@ export default function Dashboard() {
   };
 
   const selectAllSlots = async () => {
+    if (slotsLocked) return;
+    
     setSaving(true);
     const dateStr = formatDate(selectedDate);
     const allSlots = generateTimeSlots(barber.locations?.name);
@@ -207,6 +230,8 @@ export default function Dashboard() {
   };
 
   const clearAllSlots = async () => {
+    if (slotsLocked) return;
+    
     setSaving(true);
     const dateStr = formatDate(selectedDate);
     
@@ -235,6 +260,91 @@ export default function Dashboard() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/admin');
+  };
+
+  const updateServicePrice = async () => {
+    if (!editingService || !newServicePrice) return;
+    
+    const price = parseInt(newServicePrice);
+    if (isNaN(price)) return;
+    
+    await supabase
+      .from('services')
+      .update({ price })
+      .eq('id', editingService.id);
+    
+    setEditingService(null);
+    setNewServicePrice('');
+    loadServices();
+  };
+
+  const addBarber = async () => {
+    if (!newBarberName || !newBarberLocation) return;
+    
+    await supabase
+      .from('barbers')
+      .insert({
+        name: newBarberName,
+        location_id: newBarberLocation,
+        is_admin: false
+      });
+    
+    setShowAddBarber(false);
+    setNewBarberName('');
+    setNewBarberLocation('');
+    loadAllBarbers();
+  };
+
+  const deleteBarber = async (barberId) => {
+    if (!confirm('Obrisati ovog berbera?')) return;
+    
+    await supabase
+      .from('barbers')
+      .delete()
+      .eq('id', barberId);
+    
+    setEditingBarber(null);
+    loadAllBarbers();
+  };
+
+  const updateBarberName = async (newName) => {
+    if (!editingBarber || !newName) return;
+    
+    await supabase
+      .from('barbers')
+      .update({ name: newName })
+      .eq('id', editingBarber.id);
+    
+    loadAllBarbers();
+    setEditingBarber({ ...editingBarber, name: newName });
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingBarber) return;
+    
+    setUploadingImage(true);
+    
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const fileName = `${editingBarber.name.toLowerCase().replace(/[^a-z]/g, '')}.${fileExt}`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from('barbers')
+      .upload(fileName, file, { upsert: true });
+    
+    if (!uploadError) {
+      const imageUrl = `https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/barbers/${fileName}`;
+      
+      await supabase
+        .from('barbers')
+        .update({ image_url: imageUrl })
+        .eq('id', editingBarber.id);
+      
+      loadAllBarbers();
+      setEditingBarber({ ...editingBarber, image_url: imageUrl });
+    }
+    
+    setUploadingImage(false);
   };
 
   if (loading) {
@@ -298,7 +408,7 @@ export default function Dashboard() {
                   return (
                     <button
                       key={i}
-                      onClick={() => setSelectedDate(day)}
+                      onClick={() => { setSelectedDate(day); setSlotsLocked(false); }}
                       className={`flex-shrink-0 w-14 py-2 rounded-lg text-center transition-all
                         ${isSelected ? 'bg-white text-black' : 'bg-white/5 text-white'}
                         ${isToday && !isSelected ? 'ring-1 ring-white/30' : ''}`}
@@ -315,16 +425,18 @@ export default function Dashboard() {
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-white/40 text-xs tracking-wider">OZNACI SLOBODNE TERMINE</h2>
-                <div className="flex gap-2">
-                  <button onClick={selectAllSlots} disabled={saving}
-                    className="text-[10px] text-white/40 px-2 py-1 border border-white/20 rounded">
-                    SVE
-                  </button>
-                  <button onClick={clearAllSlots} disabled={saving}
-                    className="text-[10px] text-white/40 px-2 py-1 border border-white/20 rounded">
-                    BRISI
-                  </button>
-                </div>
+                {!slotsLocked && (
+                  <div className="flex gap-2">
+                    <button onClick={selectAllSlots} disabled={saving}
+                      className="text-[10px] text-white/40 px-2 py-1 border border-white/20 rounded">
+                      SVE
+                    </button>
+                    <button onClick={clearAllSlots} disabled={saving}
+                      className="text-[10px] text-white/40 px-2 py-1 border border-white/20 rounded">
+                      BRISI
+                    </button>
+                  </div>
+                )}
               </div>
               
               <div className="grid grid-cols-4 gap-2">
@@ -334,17 +446,33 @@ export default function Dashboard() {
                     <button
                       key={time}
                       onClick={() => toggleSlot(time)}
-                      disabled={saving}
+                      disabled={saving || slotsLocked}
                       className={`py-3 rounded text-sm font-medium transition-all
                         ${isAvailable ? 'bg-white text-black' : 'bg-white/5 text-white/40'}
-                        ${saving ? 'opacity-50' : ''}`}
+                        ${saving ? 'opacity-50' : ''}
+                        ${slotsLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                       {time}
                     </button>
                   );
                 })}
               </div>
+              
+              {slotsLocked && (
+                <p className="text-green-400 text-xs mt-3 text-center">✓ Termini su zakljucani</p>
+              )}
             </section>
+
+            <button
+              onClick={() => setSlotsLocked(!slotsLocked)}
+              className={`w-full py-4 rounded-lg font-medium transition-all ${
+                slotsLocked 
+                  ? 'bg-white/10 text-white border border-white/20' 
+                  : 'bg-white text-black'
+              }`}
+            >
+              {slotsLocked ? 'IZMENI TERMINE' : 'ZAKLJUCI TERMINE'}
+            </button>
           </div>
         )}
 
@@ -415,18 +543,11 @@ export default function Dashboard() {
                   <span className="text-2xl">👤</span>
                   <p className="text-sm mt-2">Berberi</p>
                 </button>
-                <button onClick={() => setAdminSection('slike')} className="bg-white/5 p-6 rounded-lg text-center">
-                  <span className="text-2xl">🖼</span>
-                  <p className="text-sm mt-2">Slike</p>
-                </button>
-                <button onClick={() => setAdminSection('vreme')} className="bg-white/5 p-6 rounded-lg text-center">
-                  <span className="text-2xl">🕐</span>
-                  <p className="text-sm mt-2">Radno vreme</p>
-                </button>
               </div>
             ) : (
               <div>
-                <button onClick={() => setAdminSection(null)} className="text-white/50 text-sm mb-4 flex items-center gap-2">
+                <button onClick={() => { setAdminSection(null); setEditingService(null); setEditingBarber(null); setShowAddBarber(false); }} 
+                  className="text-white/50 text-sm mb-4 flex items-center gap-2">
                   ← Nazad
                 </button>
                 
@@ -435,57 +556,144 @@ export default function Dashboard() {
                     <h2 className="text-white/40 text-xs tracking-wider mb-4">CENOVNIK</h2>
                     <div className="space-y-2">
                       {services.map(service => (
-                        <div key={service.id} className="bg-white/5 rounded-lg p-4 flex justify-between items-center">
+                        <button
+                          key={service.id}
+                          onClick={() => { setEditingService(service); setNewServicePrice(service.price?.toString() || ''); }}
+                          className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center text-left"
+                        >
                           <span className="text-sm">{service.name}</span>
                           <span className="text-white/50">{service.price?.toLocaleString()} RSD</span>
-                        </div>
+                        </button>
                       ))}
                     </div>
-                    <p className="text-white/30 text-xs mt-4 text-center">Izmena cena dolazi uskoro</p>
                   </div>
                 )}
 
-                {adminSection === 'berberi' && (
+                {adminSection === 'berberi' && !editingBarber && !showAddBarber && (
                   <div>
-                    <h2 className="text-white/40 text-xs tracking-wider mb-4">BERBERI</h2>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-white/40 text-xs tracking-wider">BERBERI</h2>
+                      <button onClick={() => setShowAddBarber(true)} className="text-xs bg-white text-black px-3 py-1 rounded">
+                        + DODAJ
+                      </button>
+                    </div>
                     <div className="space-y-2">
                       {allBarbers.map(b => (
-                        <div key={b.id} className="bg-white/5 rounded-lg p-4 flex justify-between items-center">
-                          <div>
-                            <span className="font-medium">{b.name}</span>
-                            {b.is_admin && <span className="text-xs text-white/30 ml-2">ADMIN</span>}
+                        <button
+                          key={b.id}
+                          onClick={() => setEditingBarber(b)}
+                          className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center"
+                        >
+                          <div className="flex items-center gap-3">
+                            {b.image_url ? (
+                              <img src={b.image_url} alt={b.name} className="w-10 h-10 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/30">
+                                👤
+                              </div>
+                            )}
+                            <div className="text-left">
+                              <span className="font-medium">{b.name}</span>
+                              {b.is_admin && <span className="text-xs text-white/30 ml-2">ADMIN</span>}
+                            </div>
                           </div>
                           <span className="text-white/30 text-sm">{b.locations?.name?.split(' ').pop()}</span>
-                        </div>
+                        </button>
                       ))}
                     </div>
-                    <p className="text-white/30 text-xs mt-4 text-center">Dodavanje berbera dolazi uskoro</p>
                   </div>
                 )}
 
-                {adminSection === 'slike' && (
+                {adminSection === 'berberi' && showAddBarber && (
                   <div>
-                    <h2 className="text-white/40 text-xs tracking-wider mb-4">SLIKE</h2>
-                    <p className="text-white/30 text-center py-8">Upload slika dolazi uskoro</p>
-                  </div>
-                )}
-
-                {adminSection === 'vreme' && (
-                  <div>
-                    <h2 className="text-white/40 text-xs tracking-wider mb-4">RADNO VREME</h2>
-                    <div className="space-y-3">
-                      <div className="bg-white/5 rounded-lg p-4">
-                        <p className="text-sm font-medium">Tension Barber I</p>
-                        <p className="text-white/30 text-sm">Bulevar kralja Petra</p>
-                        <p className="text-white/50 mt-2">10:00 - 18:00</p>
+                    <h2 className="text-white/40 text-xs tracking-wider mb-4">DODAJ BERBERA</h2>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-white/40 text-xs mb-2">IME</label>
+                        <input
+                          type="text"
+                          value={newBarberName}
+                          onChange={(e) => setNewBarberName(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                          placeholder="Ime berbera"
+                        />
                       </div>
-                      <div className="bg-white/5 rounded-lg p-4">
-                        <p className="text-sm font-medium">Tension Barber II</p>
-                        <p className="text-white/30 text-sm">Bulevar patrijarha Pavla</p>
-                        <p className="text-white/50 mt-2">10:00 - 22:00</p>
+                      <div>
+                        <label className="block text-white/40 text-xs mb-2">LOKACIJA</label>
+                        <select
+                          value={newBarberLocation}
+                          onChange={(e) => setNewBarberLocation(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                        >
+                          <option value="">Izaberi lokaciju</option>
+                          {locations.map(loc => (
+                            <option key={loc.id} value={loc.id}>{loc.name}</option>
+                          ))}
+                        </select>
                       </div>
+                      <button
+                        onClick={addBarber}
+                        disabled={!newBarberName || !newBarberLocation}
+                        className="w-full bg-white text-black py-3 rounded-lg font-medium disabled:opacity-50"
+                      >
+                        SACUVAJ
+                      </button>
                     </div>
-                    <p className="text-white/30 text-xs mt-4 text-center">Izmena radnog vremena dolazi uskoro</p>
+                  </div>
+                )}
+
+                {adminSection === 'berberi' && editingBarber && (
+                  <div>
+                    <h2 className="text-white/40 text-xs tracking-wider mb-4">IZMENI BERBERA</h2>
+                    
+                    <div className="flex flex-col items-center mb-6">
+                      {editingBarber.image_url ? (
+                        <img src={editingBarber.image_url} alt={editingBarber.name} className="w-24 h-24 rounded-full object-cover mb-3" />
+                      ) : (
+                        <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-3xl mb-3">
+                          👤
+                        </div>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingImage}
+                        className="text-sm text-white/50 border border-white/20 px-4 py-2 rounded"
+                      >
+                        {uploadingImage ? 'UPLOAD...' : 'DODAJ SLIKU'}
+                      </button>
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="block text-white/40 text-xs mb-2">IME</label>
+                      <input
+                        type="text"
+                        value={editingBarber.name}
+                        onChange={(e) => setEditingBarber({ ...editingBarber, name: e.target.value })}
+                        onBlur={(e) => updateBarberName(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                      />
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="block text-white/40 text-xs mb-2">LOKACIJA</label>
+                      <p className="text-white/50">{editingBarber.locations?.name}</p>
+                    </div>
+
+                    {!editingBarber.is_admin && (
+                      <button
+                        onClick={() => deleteBarber(editingBarber.id)}
+                        className="w-full bg-red-500/20 text-red-400 py-3 rounded-lg font-medium mt-4"
+                      >
+                        OBRISI BERBERA
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -494,6 +702,37 @@ export default function Dashboard() {
         )}
       </main>
 
+      {editingService && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4">
+          <div className="bg-[#111] w-full max-w-md rounded-t-2xl p-6">
+            <h3 className="text-lg font-medium mb-4">{editingService.name}</h3>
+            <div className="mb-4">
+              <label className="block text-white/40 text-xs mb-2">CENA (RSD)</label>
+              <input
+                type="number"
+                value={newServicePrice}
+                onChange={(e) => setNewServicePrice(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setEditingService(null); setNewServicePrice(''); }}
+                className="flex-1 bg-white/10 text-white py-3 rounded-lg"
+              >
+                OTKAZI
+              </button>
+              <button
+                onClick={updateServicePrice}
+                className="flex-1 bg-white text-black py-3 rounded-lg font-medium"
+              >
+                SACUVAJ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar {
           display: none;
@@ -501,6 +740,10 @@ export default function Dashboard() {
         .scrollbar-hide {
           -ms-overflow-style: none;
           scrollbar-width: none;
+        }
+        select option {
+          background: #111;
+          color: white;
         }
       `}</style>
     </div>
