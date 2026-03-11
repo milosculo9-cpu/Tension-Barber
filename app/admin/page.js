@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 
@@ -13,6 +13,7 @@ export default function AdminLogin() {
   const [showSwipe, setShowSwipe] = useState(false);
   const [showForm, setShowForm] = useState(false);
   
+  const touchStartY = useRef(0);
   const router = useRouter();
   const supabase = createClientComponentClient();
 
@@ -23,6 +24,31 @@ export default function AdminLogin() {
     
     return () => clearTimeout(timer1);
   }, []);
+
+  useEffect(() => {
+    if (!showSwipe || !preloading) return;
+
+    const handleTouchStart = (e) => {
+      touchStartY.current = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (e) => {
+      const touchEndY = e.changedTouches[0].clientY;
+      const diff = touchStartY.current - touchEndY;
+      
+      if (diff > 50) {
+        handleSwipeUp();
+      }
+    };
+
+    document.addEventListener('touchstart', handleTouchStart);
+    document.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [showSwipe, preloading]);
 
   const handleSwipeUp = () => {
     setPreloading(false);
@@ -69,34 +95,29 @@ export default function AdminLogin() {
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 overflow-hidden">
       
-      {/* Preloader */}
       {preloading && (
-        <div className={`fixed inset-0 bg-black z-50 flex flex-col items-center justify-center transition-transform duration-500 ${showSwipe && !preloading ? '-translate-y-full' : 'translate-y-0'}`}>
+        <div 
+          className={`fixed inset-0 bg-black z-50 flex flex-col items-center justify-center transition-transform duration-500 ${!preloading ? '-translate-y-full' : 'translate-y-0'}`}
+        >
           <img
             src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/logo/logo.white.PNG"
             alt="Tension Barber"
-            className="h-24 mb-8"
+            className="h-48 mb-8"
           />
           
-          {/* Swipe indicator */}
           {showSwipe && (
-            <button 
-              onClick={handleSwipeUp}
-              className="animate-bounce flex flex-col items-center text-white/50 mt-8"
-            >
+            <div className="animate-bounce flex flex-col items-center text-white/50 mt-8">
               <svg className="w-8 h-8 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
               <span className="text-sm mt-2">Prevuci na gore</span>
-            </button>
+            </div>
           )}
         </div>
       )}
 
-      {/* Main content */}
       <div className={`w-full max-w-md transition-all duration-500 ${showForm ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
         
-        {/* Title */}
         <h1 className="text-center text-white text-2xl tracking-[0.2em] font-light mb-2">
           TENSION BARBER
         </h1>
