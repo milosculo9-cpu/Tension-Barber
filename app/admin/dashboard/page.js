@@ -56,9 +56,56 @@ export default function Dashboard() {
   const [uploadingImage, setUploadingImage] = useState(false);
   
   const fileInputRef = useRef(null);
+  const touchStartX = useRef(0);
+  const mainRef = useRef(null);
   const router = useRouter();
   const supabase = createClientComponentClient();
   const days = getNext14Days();
+
+  const tabs = [
+    { id: 'termini', label: 'Termini' },
+    { id: 'rezervacije', label: 'Rezervacije' },
+    { id: 'statistika', label: 'Statistika' },
+    { id: 'podesavanja', label: 'Podesavanja' }
+  ];
+
+  // Swipe handler for tabs
+  useEffect(() => {
+    const handleTouchStart = (e) => {
+      touchStartX.current = e.touches[0].clientX;
+    };
+
+    const handleTouchEnd = (e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const diff = touchStartX.current - touchEndX;
+      
+      const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
+      const currentIndex = availableTabs.findIndex(t => t.id === activeTab);
+      
+      if (diff > 80 && currentIndex < availableTabs.length - 1) {
+        // Swipe left - next tab
+        setActiveTab(availableTabs[currentIndex + 1].id);
+        setAdminSection(null);
+      } else if (diff < -80 && currentIndex > 0) {
+        // Swipe right - previous tab
+        setActiveTab(availableTabs[currentIndex - 1].id);
+        setAdminSection(null);
+      }
+    };
+
+    const main = mainRef.current;
+    if (main) {
+      main.addEventListener('touchstart', handleTouchStart);
+      main.addEventListener('touchend', handleTouchEnd);
+    }
+
+    return () => {
+      if (main) {
+        main.removeEventListener('touchstart', handleTouchStart);
+        main.removeEventListener('touchend', handleTouchEnd);
+      }
+    };
+  }, [activeTab, barber]);
 
   useEffect(() => {
     loadBarberData();
@@ -316,7 +363,6 @@ export default function Dashboard() {
       .eq('id', editingBarber.id);
     
     loadAllBarbers();
-    setEditingBarber({ ...editingBarber, name: newName });
   };
 
   const handleImageUpload = async (e) => {
@@ -356,12 +402,7 @@ export default function Dashboard() {
   }
 
   const timeSlots = generateTimeSlots(barber.locations?.name);
-  const tabs = [
-    { id: 'termini', label: 'Termini' },
-    { id: 'rezervacije', label: 'Rezervacije' },
-    { id: 'statistika', label: 'Statistika' },
-    ...(barber.is_admin ? [{ id: 'podesavanja', label: 'Podesavanja' }] : [])
-  ];
+  const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -381,7 +422,7 @@ export default function Dashboard() {
 
         <nav className="overflow-x-auto scrollbar-hide">
           <div className="flex min-w-max border-t border-white/10">
-            {tabs.map(tab => (
+            {availableTabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setAdminSection(null); }}
@@ -395,7 +436,7 @@ export default function Dashboard() {
         </nav>
       </header>
 
-      <main className="p-4 pb-20">
+      <main ref={mainRef} className="p-4 pb-20 min-h-[60vh]">
         
         {activeTab === 'termini' && (
           <div className="space-y-6">
@@ -534,14 +575,20 @@ export default function Dashboard() {
         {activeTab === 'podesavanja' && barber.is_admin && (
           <div>
             {!adminSection ? (
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => setAdminSection('cenovnik')} className="bg-white/5 p-6 rounded-lg text-center">
-                  <span className="text-2xl">💰</span>
-                  <p className="text-sm mt-2">Cenovnik</p>
+              <div className="space-y-4">
+                <button onClick={() => setAdminSection('cenovnik')} className="w-full bg-white/5 p-8 rounded-lg flex items-center gap-4">
+                  <span className="text-4xl">💰</span>
+                  <div className="text-left">
+                    <p className="text-lg font-medium">Cenovnik</p>
+                    <p className="text-white/40 text-sm">Izmeni cene usluga</p>
+                  </div>
                 </button>
-                <button onClick={() => setAdminSection('berberi')} className="bg-white/5 p-6 rounded-lg text-center">
-                  <span className="text-2xl">👤</span>
-                  <p className="text-sm mt-2">Berberi</p>
+                <button onClick={() => setAdminSection('berberi')} className="w-full bg-white/5 p-8 rounded-lg flex items-center gap-4">
+                  <span className="text-4xl">👤</span>
+                  <div className="text-left">
+                    <p className="text-lg font-medium">Berberi</p>
+                    <p className="text-white/40 text-sm">Dodaj, izmeni ili obrisi berbere</p>
+                  </div>
                 </button>
               </div>
             ) : (
@@ -586,18 +633,18 @@ export default function Dashboard() {
                         >
                           <div className="flex items-center gap-3">
                             {b.image_url ? (
-                              <img src={b.image_url} alt={b.name} className="w-10 h-10 rounded-full object-cover" />
+                              <img src={b.image_url} alt={b.name} className="w-12 h-12 rounded-full object-cover" />
                             ) : (
-                              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white/30">
+                              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-xl">
                                 👤
                               </div>
                             )}
                             <div className="text-left">
                               <span className="font-medium">{b.name}</span>
                               {b.is_admin && <span className="text-xs text-white/30 ml-2">ADMIN</span>}
+                              <p className="text-white/30 text-sm">{b.locations?.name}</p>
                             </div>
                           </div>
-                          <span className="text-white/30 text-sm">{b.locations?.name?.split(' ').pop()}</span>
                         </button>
                       ))}
                     </div>
@@ -646,11 +693,16 @@ export default function Dashboard() {
                   <div>
                     <h2 className="text-white/40 text-xs tracking-wider mb-4">IZMENI BERBERA</h2>
                     
+                    {/* Barber Image - Large */}
                     <div className="flex flex-col items-center mb-6">
                       {editingBarber.image_url ? (
-                        <img src={editingBarber.image_url} alt={editingBarber.name} className="w-24 h-24 rounded-full object-cover mb-3" />
+                        <img 
+                          src={editingBarber.image_url} 
+                          alt={editingBarber.name} 
+                          className="w-32 h-32 rounded-full object-cover mb-4 border-2 border-white/20" 
+                        />
                       ) : (
-                        <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-3xl mb-3">
+                        <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-5xl mb-4 border-2 border-white/20">
                           👤
                         </div>
                       )}
@@ -666,10 +718,11 @@ export default function Dashboard() {
                         disabled={uploadingImage}
                         className="text-sm text-white/50 border border-white/20 px-4 py-2 rounded"
                       >
-                        {uploadingImage ? 'UPLOAD...' : 'DODAJ SLIKU'}
+                        {uploadingImage ? 'UPLOAD...' : editingBarber.image_url ? 'PROMENI SLIKU' : 'DODAJ SLIKU'}
                       </button>
                     </div>
 
+                    {/* Name */}
                     <div className="mb-4">
                       <label className="block text-white/40 text-xs mb-2">IME</label>
                       <input
@@ -681,15 +734,17 @@ export default function Dashboard() {
                       />
                     </div>
 
-                    <div className="mb-4">
+                    {/* Location */}
+                    <div className="mb-6">
                       <label className="block text-white/40 text-xs mb-2">LOKACIJA</label>
-                      <p className="text-white/50">{editingBarber.locations?.name}</p>
+                      <p className="text-white/50 bg-white/5 rounded-lg px-4 py-3">{editingBarber.locations?.name}</p>
                     </div>
 
+                    {/* Delete button - only for non-admin */}
                     {!editingBarber.is_admin && (
                       <button
                         onClick={() => deleteBarber(editingBarber.id)}
-                        className="w-full bg-red-500/20 text-red-400 py-3 rounded-lg font-medium mt-4"
+                        className="w-full bg-red-500/20 text-red-400 py-3 rounded-lg font-medium"
                       >
                         OBRISI BERBERA
                       </button>
@@ -702,6 +757,7 @@ export default function Dashboard() {
         )}
       </main>
 
+      {/* Edit Service Modal */}
       {editingService && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4">
           <div className="bg-[#111] w-full max-w-md rounded-t-2xl p-6">
