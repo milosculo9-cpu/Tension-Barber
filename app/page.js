@@ -283,6 +283,18 @@ export default function Home() {
     }, 150)
   }
 
+  // Helper function to get next time slot
+  const getNextTimeSlot = (currentTime) => {
+    const [hours, minutes] = currentTime.split(':').map(Number)
+    let nextMinutes = minutes + 30
+    let nextHours = hours
+    if (nextMinutes >= 60) {
+      nextMinutes = 0
+      nextHours += 1
+    }
+    return `${nextHours.toString().padStart(2, '0')}:${nextMinutes.toString().padStart(2, '0')}`
+  }
+
   // Handle booking submission
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -301,8 +313,32 @@ export default function Home() {
       ? `${selectedService.name} + ${addonNames}`
       : selectedService.name
     const fullServicePrice = (selectedService.price || 0) + addonTotal
+    
+    // If addons are selected, we need the next slot too
+    const needsNextSlot = selectedAddons.length > 0
+    const nextSlotTime = getNextTimeSlot(selectedTime)
+    let nextSlotAvailable = false
+    let bookingStatus = 'confirmed'
 
     try {
+      // Check if next slot is available (only if we have addons)
+      if (needsNextSlot) {
+        const { data: nextSlot } = await supabase
+          .from('barber_available_slots')
+          .select('*')
+          .eq('barber_id', selectedBarber.id)
+          .eq('slot_date', selectedDate.iso)
+          .eq('slot_time', nextSlotTime + ':00')
+          .eq('is_booked', false)
+          .single()
+        
+        nextSlotAvailable = !!nextSlot
+        
+        if (!nextSlotAvailable) {
+          bookingStatus = 'needs_call'
+        }
+      }
+
       const { data, error } = await supabase
         .from('appointments')
         .insert([
@@ -318,14 +354,14 @@ export default function Home() {
               : null,
             appointment_date: selectedDate.iso,
             appointment_time: selectedTime + ':00',
-            duration_minutes: 30,
-            status: 'confirmed'
+            duration_minutes: needsNextSlot ? 60 : 30,
+            status: bookingStatus
           }
         ])
 
       if (error) throw error
 
-      // Mark the slot as booked
+      // Mark the main slot as booked
       await supabase
         .from('barber_available_slots')
         .update({ is_booked: true })
@@ -333,10 +369,24 @@ export default function Home() {
         .eq('slot_date', selectedDate.iso)
         .eq('slot_time', selectedTime + ':00')
 
+      // If we have addons and next slot is available, book it too
+      if (needsNextSlot && nextSlotAvailable) {
+        await supabase
+          .from('barber_available_slots')
+          .update({ is_booked: true })
+          .eq('barber_id', selectedBarber.id)
+          .eq('slot_date', selectedDate.iso)
+          .eq('slot_time', nextSlotTime + ':00')
+      }
+
       // Update local state immediately
+      const slotsToRemove = [selectedTime]
+      if (needsNextSlot && nextSlotAvailable) {
+        slotsToRemove.push(nextSlotTime)
+      }
       setAvailableSlots(prev => ({
         ...prev,
-        [selectedBarber.id]: prev[selectedBarber.id]?.filter(t => t !== selectedTime) || []
+        [selectedBarber.id]: prev[selectedBarber.id]?.filter(t => !slotsToRemove.includes(t)) || []
       }))
 
       localStorage.setItem('tensionBarberCustomer', JSON.stringify(form))
@@ -349,7 +399,8 @@ export default function Home() {
         },
         barber: selectedBarber,
         date: selectedDate,
-        time: selectedTime
+        time: selectedTime,
+        needsCall: bookingStatus === 'needs_call'
       })
 
       setShowForm(false)
@@ -978,15 +1029,27 @@ export default function Home() {
       {/* ==================== CONFIRMATION ==================== */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="bg-green-600 text-white px-6 py-6 rounded-lg shadow-2xl animate-slide-up max-w-sm w-full">
+          <div className={`text-white px-6 py-6 rounded-lg shadow-2xl animate-slide-up max-w-sm w-full
+            ${confirmedBooking?.needsCall 
+              ? 'bg-gradient-to-br from-orange-500/90 to-orange-700/80 backdrop-blur-sm' 
+              : 'bg-green-600'}`}
+          >
             <div className="flex flex-col items-center text-center gap-3">
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              {confirmedBooking?.needsCall ? (
+                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+              ) : (
+                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
               <div>
-                <p className="font-semibold text-xl">Rezervacija potvrđena!</p>
+                <p className="font-semibold text-xl">
+                  {confirmedBooking?.needsCall ? 'Zahtev primljen!' : 'Rezervacija potvrđena!'}
+                </p>
                 {confirmedBooking && (
-                  <div className="mt-3 text-sm text-green-100 space-y-1">
+                  <div className={`mt-3 text-sm space-y-1 ${confirmedBooking.needsCall ? 'text-orange-100' : 'text-green-100'}`}>
                     <p>{confirmedBooking.service.name}</p>
                     <p className="font-semibold text-white text-base">
                       {confirmedBooking.service.price 
@@ -996,7 +1059,12 @@ export default function Home() {
                     </p>
                   </div>
                 )}
-                <p className="text-xs text-green-200 mt-3">Potvrda će biti poslata na email.</p>
+                <p className={`text-xs mt-3 ${confirmedBooking?.needsCall ? 'text-orange-200' : 'text-green-200'}`}>
+                  {confirmedBooking?.needsCall 
+                    ? 'Berber će vas pozvati radi dogovora termina.'
+                    : 'Potvrda će biti poslata na email.'
+                  }
+                </p>
               </div>
             </div>
           </div>
