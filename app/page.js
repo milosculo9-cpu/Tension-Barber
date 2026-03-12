@@ -89,7 +89,7 @@ export default function Home() {
     const { data: locations } = await supabase
       .from('locations')
       .select('*')
-      .order('id')
+      .order('name')
 
     // Load barbers with their locations
     const { data: barbers } = await supabase
@@ -98,7 +98,16 @@ export default function Home() {
       .order('name')
 
     if (locations && barbers) {
-      const salonsData = locations.map(loc => {
+      // Sort locations so Petra (Lokal 1) comes first
+      const sortedLocations = [...locations].sort((a, b) => {
+        const aIsPetra = a.name.includes('Petra')
+        const bIsPetra = b.name.includes('Petra')
+        if (aIsPetra && !bIsPetra) return -1
+        if (!aIsPetra && bIsPetra) return 1
+        return 0
+      })
+
+      const salonsData = sortedLocations.map(loc => {
         const isLoc1 = loc.name.includes('Petra')
         const locationBarbers = barbers
           .filter(b => b.location_id === loc.id)
