@@ -6,11 +6,25 @@
 
 * {
   font-family: 'Montserrat', sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   background-color: #000;
   color: #fff;
+  overscroll-behavior: none;
+}
+
+/* Prevent iOS zoom on input focus */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+    transform: translateZ(0);
+  }
+  
+  input:focus, select:focus, textarea:focus {
+    font-size: 16px !important;
+  }
 }
 
 /* Hero Slider */
