@@ -49,6 +49,8 @@ export default function Dashboard() {
   const [locations, setLocations] = useState([]);
   const [slotsLocked, setSlotsLocked] = useState(false);
   const [newAppointmentAlert, setNewAppointmentAlert] = useState(null);
+  const [showPastAppointments, setShowPastAppointments] = useState(null); // 'today' | 'total' | null
+  const [pastAppointments, setPastAppointments] = useState([]);
   
   const [editingService, setEditingService] = useState(null);
   const [editingBarber, setEditingBarber] = useState(null);
@@ -248,25 +250,28 @@ export default function Dashboard() {
 
   const loadStats = async (barberId) => {
     const today = formatDate(new Date());
+    const thirtyDaysAgo = formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
     
     const { count: total } = await supabase
       .from('appointments')
       .select('*', { count: 'exact', head: true })
       .eq('barber_id', barberId)
-      .eq('status', 'confirmed');
+      .in('status', ['confirmed', 'needs_call'])
+      .gte('appointment_date', thirtyDaysAgo);
 
     const { count: todayCount } = await supabase
       .from('appointments')
       .select('*', { count: 'exact', head: true })
       .eq('barber_id', barberId)
       .eq('appointment_date', today)
-      .eq('status', 'confirmed');
+      .in('status', ['confirmed', 'needs_call']);
 
     const { data: revenueData } = await supabase
       .from('appointments')
       .select('service_price')
       .eq('barber_id', barberId)
-      .eq('status', 'confirmed');
+      .in('status', ['confirmed', 'needs_call'])
+      .gte('appointment_date', thirtyDaysAgo);
 
     const revenue = revenueData?.reduce((sum, a) => sum + (a.service_price || 0), 0) || 0;
 
@@ -354,6 +359,30 @@ export default function Dashboard() {
 
     loadAppointments();
     loadStats(barber.id);
+  };
+
+  const loadPastAppointments = async (type) => {
+    if (!barber) return;
+    
+    const today = formatDate(new Date());
+    const thirtyDaysAgo = formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    
+    let query = supabase
+      .from('appointments')
+      .select('*')
+      .eq('barber_id', barber.id)
+      .neq('status', 'cancelled')
+      .gte('appointment_date', thirtyDaysAgo)
+      .order('appointment_date', { ascending: false })
+      .order('appointment_time', { ascending: false });
+    
+    if (type === 'today') {
+      query = query.eq('appointment_date', today);
+    }
+    
+    const { data } = await query;
+    setPastAppointments(data || []);
+    setShowPastAppointments(type);
   };
 
   const handleLogout = async () => {
@@ -598,11 +627,28 @@ export default function Dashboard() {
           <div>
             <h2 className="text-white/40 text-xs tracking-wider mb-4">PREDSTOJEĆE REZERVACIJE</h2>
             
-            {appointments.filter(a => a.status !== 'cancelled').length === 0 ? (
+            {appointments.filter(a => {
+              if (a.status === 'cancelled') return false;
+              // Hide appointments that started more than 30 minutes ago
+              const now = new Date();
+              const aptDate = new Date(a.appointment_date);
+              const [hours, minutes] = (a.appointment_time || '00:00').split(':').map(Number);
+              aptDate.setHours(hours, minutes, 0, 0);
+              const thirtyMinAfterStart = new Date(aptDate.getTime() + 30 * 60 * 1000);
+              return now < thirtyMinAfterStart;
+            }).length === 0 ? (
               <div className="text-center text-white/30 py-12">Nema rezervacija</div>
             ) : (
               <div className="space-y-3">
-                {appointments.filter(a => a.status !== 'cancelled').map(apt => (
+                {appointments.filter(a => {
+                  if (a.status === 'cancelled') return false;
+                  const now = new Date();
+                  const aptDate = new Date(a.appointment_date);
+                  const [hours, minutes] = (a.appointment_time || '00:00').split(':').map(Number);
+                  aptDate.setHours(hours, minutes, 0, 0);
+                  const thirtyMinAfterStart = new Date(aptDate.getTime() + 30 * 60 * 1000);
+                  return now < thirtyMinAfterStart;
+                }).map(apt => (
                   <div 
                     key={apt.id} 
                     className={`rounded-lg p-4 ${
@@ -647,15 +693,24 @@ export default function Dashboard() {
 
         {activeTab === 'statistika' && (
           <div className="grid grid-cols-1 gap-4">
-            <div className="bg-white/5 rounded-lg p-6 text-center">
+            <button 
+              onClick={() => loadPastAppointments('today')}
+              className="bg-white/5 rounded-lg p-6 text-center hover:bg-white/10 transition"
+            >
               <p className="text-white/40 text-xs tracking-wider">DANAS</p>
               <p className="text-4xl font-light mt-2">{stats.today}</p>
               <p className="text-white/30 text-sm">rezervacija</p>
-            </div>
-            <div className="bg-white/5 rounded-lg p-6 text-center">
-              <p className="text-white/40 text-xs tracking-wider">UKUPNO</p>
+              <p className="text-white/20 text-xs mt-2">Klikni za detalje →</p>
+            </button>
+            <button 
+              onClick={() => loadPastAppointments('total')}
+              className="bg-white/5 rounded-lg p-6 text-center hover:bg-white/10 transition"
+            >
+              <p className="text-white/40 text-xs tracking-wider">UKUPNO (30 dana)</p>
               <p className="text-4xl font-light mt-2">{stats.total}</p>
               <p className="text-white/30 text-sm">rezervacija</p>
+              <p className="text-white/20 text-xs mt-2">Klikni za detalje →</p>
+            </button>
             </div>
             <div className="bg-white/5 rounded-lg p-6 text-center">
               <p className="text-white/40 text-xs tracking-wider">ZARADA</p>
@@ -877,6 +932,75 @@ export default function Dashboard() {
               >
                 SACUVAJ
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Past Appointments Modal */}
+      {showPastAppointments && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowPastAppointments(null)}
+        >
+          <div 
+            className="bg-zinc-900 rounded-xl w-full max-w-md max-h-[80vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
+              <h3 className="font-medium text-lg">
+                {showPastAppointments === 'today' ? 'Današnje rezervacije' : 'Rezervacije (30 dana)'}
+              </h3>
+              <button 
+                onClick={() => setShowPastAppointments(null)}
+                className="text-white/50 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-[60vh] p-4">
+              {pastAppointments.length === 0 ? (
+                <div className="text-center text-white/30 py-8">Nema rezervacija</div>
+              ) : (
+                <div className="space-y-3">
+                  {pastAppointments.map(apt => {
+                    const aptDate = new Date(apt.appointment_date);
+                    const [hours, minutes] = (apt.appointment_time || '00:00').split(':').map(Number);
+                    aptDate.setHours(hours, minutes, 0, 0);
+                    const isPast = new Date() > new Date(aptDate.getTime() + 30 * 60 * 1000);
+                    
+                    return (
+                      <div 
+                        key={apt.id} 
+                        className={`rounded-lg p-3 ${isPast ? 'bg-white/5 opacity-60' : 'bg-white/10'}`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-sm">{apt.customer_name}</p>
+                            <p className="text-white/50 text-xs">{apt.service_name}</p>
+                            <p className="text-white/30 text-xs mt-1">
+                              {new Date(apt.appointment_date).toLocaleDateString('sr-RS')} • {apt.appointment_time?.slice(0, 5)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium text-sm">{apt.service_price?.toLocaleString()} RSD</p>
+                            {isPast && (
+                              <span className="text-green-400 text-xs">✓ Završeno</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-zinc-700 text-center">
+              <p className="text-white/30 text-sm">
+                Ukupna zarada: <span className="text-white font-medium">
+                  {pastAppointments.reduce((sum, a) => sum + (a.service_price || 0), 0).toLocaleString()} RSD
+                </span>
+              </p>
             </div>
           </div>
         </div>
