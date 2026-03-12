@@ -72,6 +72,7 @@ export default function Home() {
   const [showNavbar, setShowNavbar] = useState(true)
   const [confirmedBooking, setConfirmedBooking] = useState(null)
   const [openDropdown, setOpenDropdown] = useState(null)
+  const [bookingAnimation, setBookingAnimation] = useState(null) // 'logo' | 'fade' | 'confirm' | null
   
   // Dynamic data from database
   const [salons, setSalons] = useState([])
@@ -203,6 +204,9 @@ export default function Home() {
 
   // Preload critical images
   useEffect(() => {
+    // Scroll to top on page load
+    window.scrollTo(0, 0)
+    
     const hidePreloader = () => {
       setPreloaderFading(true)
       setTimeout(() => {
@@ -322,8 +326,19 @@ export default function Home() {
       })
 
       setShowForm(false)
-      setShowConfirm(true)
       setSelectedService(null)
+      
+      // Animation sequence: logo (1s) -> fade out (0.5s) -> show confirmation
+      setBookingAnimation('logo')
+      
+      setTimeout(() => {
+        setBookingAnimation('fade')
+      }, 1000)
+      
+      setTimeout(() => {
+        setBookingAnimation(null)
+        setShowConfirm(true)
+      }, 1500)
       
       setTimeout(() => {
         setShowConfirm(false)
@@ -332,7 +347,8 @@ export default function Home() {
         setSelectedDate(null)
         setSelectedBarber(null)
         setSelectedTime(null)
-      }, 5000)
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }, 6500)
 
     } catch (error) {
       console.error('Booking error:', error)
@@ -866,27 +882,45 @@ export default function Home() {
         </div>
       )}
 
+      {/* ==================== BOOKING ANIMATION ==================== */}
+      {bookingAnimation && (
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center transition-all duration-500
+          ${bookingAnimation === 'logo' ? 'bg-black/90' : ''}
+          ${bookingAnimation === 'fade' ? 'bg-black/0' : ''}`}
+        >
+          <img 
+            src={getLogoUrl('white')} 
+            alt="Tension Barber" 
+            className={`w-48 md:w-60 transition-all duration-500
+              ${bookingAnimation === 'logo' ? 'opacity-100 scale-100' : ''}
+              ${bookingAnimation === 'fade' ? 'opacity-0 scale-95' : ''}`}
+          />
+        </div>
+      )}
+
       {/* ==================== CONFIRMATION ==================== */}
       {showConfirm && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-5 rounded-lg shadow-2xl animate-slide-up max-w-sm w-full mx-4">
-          <div className="flex items-start gap-3">
-            <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <div>
-              <p className="font-semibold text-lg">Rezervacija potvrđena!</p>
-              {confirmedBooking && (
-                <div className="mt-2 text-sm text-green-100 space-y-1">
-                  <p>{confirmedBooking.service.name}</p>
-                  <p className="font-semibold text-white">
-                    {confirmedBooking.service.price 
-                      ? `Cena: ${confirmedBooking.service.price.toLocaleString()} RSD`
-                      : 'Cena: po dogovoru'
-                    }
-                  </p>
-                </div>
-              )}
-              <p className="text-xs text-green-200 mt-2">Potvrda će biti poslata na email.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="bg-green-600 text-white px-6 py-6 rounded-lg shadow-2xl animate-slide-up max-w-sm w-full">
+            <div className="flex flex-col items-center text-center gap-3">
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <div>
+                <p className="font-semibold text-xl">Rezervacija potvrđena!</p>
+                {confirmedBooking && (
+                  <div className="mt-3 text-sm text-green-100 space-y-1">
+                    <p>{confirmedBooking.service.name}</p>
+                    <p className="font-semibold text-white text-base">
+                      {confirmedBooking.service.price 
+                        ? `Cena: ${confirmedBooking.service.price.toLocaleString()} RSD`
+                        : 'Cena: po dogovoru'
+                      }
+                    </p>
+                  </div>
+                )}
+                <p className="text-xs text-green-200 mt-3">Potvrda će biti poslata na email.</p>
+              </div>
             </div>
           </div>
         </div>
