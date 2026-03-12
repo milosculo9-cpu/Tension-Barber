@@ -711,7 +711,6 @@ export default function Dashboard() {
               <p className="text-white/30 text-sm">rezervacija</p>
               <p className="text-white/20 text-xs mt-2">Klikni za detalje →</p>
             </button>
-            </div>
             <div className="bg-white/5 rounded-lg p-6 text-center">
               <p className="text-white/40 text-xs tracking-wider">ZARADA</p>
               <p className="text-4xl font-light mt-2">{stats.revenue.toLocaleString()}</p>
