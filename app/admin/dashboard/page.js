@@ -71,11 +71,51 @@ export default function Dashboard() {
     { id: 'podesavanja', label: 'Podesavanja' }
   ];
 
+  // Change tab and scroll to top
   const changeTab = (tabId) => {
     setActiveTab(tabId);
     setAdminSection(null);
     window.scrollTo(0, 0);
   };
+
+  // Swipe handler for tabs
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+    
+    const handleTouchStart = (e) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (e) => {
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      
+      const diffX = startX - endX;
+      const diffY = startY - endY;
+      
+      // Only trigger if horizontal movement is dominant and significant
+      if (Math.abs(diffX) > Math.abs(diffY) * 2.5 && Math.abs(diffX) > 80) {
+        const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
+        const currentIndex = availableTabs.findIndex(t => t.id === activeTab);
+        
+        if (diffX > 0 && currentIndex < availableTabs.length - 1) {
+          changeTab(availableTabs[currentIndex + 1].id);
+        } else if (diffX < 0 && currentIndex > 0) {
+          changeTab(availableTabs[currentIndex - 1].id);
+        }
+      }
+    };
+
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [activeTab, barber]);
 
   useEffect(() => {
     loadBarberData();
@@ -104,12 +144,9 @@ export default function Dashboard() {
         },
         (payload) => {
           console.log('New appointment:', payload);
-          // Show alert
           setNewAppointmentAlert(payload.new);
-          // Reload appointments
           loadAppointments();
           loadStats(barber.id);
-          // Hide alert after 5 seconds
           setTimeout(() => setNewAppointmentAlert(null), 5000);
         }
       )
@@ -387,7 +424,13 @@ export default function Dashboard() {
     setUploadingImage(true);
     
     const fileExt = file.name.split('.').pop().toLowerCase();
-    const fileName = `${editingBarber.name.toLowerCase().replace(/[^a-z]/g, '')}.${fileExt}`;
+    const fileName = `${editingBarber.name.toLowerCase()
+      .replace(/đ/g, 'dj')
+      .replace(/č/g, 'c')
+      .replace(/ć/g, 'c')
+      .replace(/š/g, 's')
+      .replace(/ž/g, 'z')
+      .replace(/[^a-z]/g, '')}.${fileExt}`;
     
     const { error: uploadError } = await supabase.storage
       .from('barbers')
@@ -534,7 +577,7 @@ export default function Dashboard() {
               </div>
               
               {slotsLocked && (
-                <p className="text-green-400 text-xs mt-3 text-center">Termini su zakljucani</p>
+                <p className="text-green-400 text-xs mt-3 text-center">✓ Termini su zakljucani</p>
               )}
             </section>
 
@@ -566,7 +609,7 @@ export default function Dashboard() {
                         <p className="font-medium">{apt.customer_name}</p>
                         <p className="text-white/50 text-sm">{apt.service_name}</p>
                         <p className="text-white/30 text-sm mt-1">
-                          {new Date(apt.appointment_date).toLocaleDateString('sr-RS')} - {apt.appointment_time?.slice(0, 5)}
+                          {new Date(apt.appointment_date).toLocaleDateString('sr-RS')} • {apt.appointment_time?.slice(0, 5)}
                         </p>
                         {apt.customer_phone && (
                           <a href={`tel:${apt.customer_phone}`} className="text-white/40 text-sm hover:text-white">
