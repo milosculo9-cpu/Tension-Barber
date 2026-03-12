@@ -173,3 +173,28 @@ select option {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* Mobile orientation lock - show overlay in landscape */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 99999;
+  }
+  
+  body::after {
+    content: '📱 Molimo okrenite telefon vertikalno';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 18px;
+    text-align: center;
+    z-index: 100000;
+    padding: 20px;
+    white-space: nowrap;
+  }
+}
