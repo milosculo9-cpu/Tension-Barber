@@ -68,7 +68,7 @@ export default function Home() {
   const [showForm, setShowForm] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [form, setForm] = useState({ email: '', name: '', phone: '', birthday: '' })
+  const [form, setForm] = useState({ email: '', name: '', phone: '', birthDay: '', birthMonth: '', birthYear: '' })
   const [showNavbar, setShowNavbar] = useState(true)
   const [confirmedBooking, setConfirmedBooking] = useState(null)
   
@@ -285,7 +285,9 @@ export default function Home() {
             customer_name: form.name,
             customer_email: form.email,
             customer_phone: form.phone,
-            customer_birthday: form.birthday || null,
+            customer_birthday: (form.birthYear && form.birthMonth && form.birthDay) 
+              ? `${form.birthYear}-${form.birthMonth}-${form.birthDay}` 
+              : null,
             appointment_date: selectedDate.iso,
             appointment_time: selectedTime + ':00',
             duration_minutes: 30,
@@ -765,13 +767,37 @@ export default function Home() {
               </div>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Datum rođenja (za popust)</label>
-                <div className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5">
-                  <input
-                    type="date"
-                    className="w-full bg-transparent text-sm focus:outline-none"
-                    value={form.birthday}
-                    onChange={(e) => setForm({ ...form, birthday: e.target.value })}
-                  />
+                <div className="grid grid-cols-3 gap-2">
+                  <select
+                    className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer text-center"
+                    value={form.birthDay || ''}
+                    onChange={(e) => setForm({ ...form, birthDay: e.target.value })}
+                  >
+                    <option value="">Dan</option>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                      <option key={day} value={day.toString().padStart(2, '0')}>{day}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer text-center"
+                    value={form.birthMonth || ''}
+                    onChange={(e) => setForm({ ...form, birthMonth: e.target.value })}
+                  >
+                    <option value="">Mesec</option>
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'].map((month, i) => (
+                      <option key={i} value={(i + 1).toString().padStart(2, '0')}>{month}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer text-center"
+                    value={form.birthYear || ''}
+                    onChange={(e) => setForm({ ...form, birthYear: e.target.value })}
+                  >
+                    <option value="">Godina</option>
+                    {Array.from({ length: 80 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <button
