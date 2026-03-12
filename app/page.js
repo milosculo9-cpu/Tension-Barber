@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { supabase, STORAGE_URL, getLogoUrl, getBarberImageUrl, getBackgroundImageUrl } from '@/lib/supabase'
 
-const HERO_IMAGES = [
+// Desktop hero images
+const DESKTOP_HERO_IMAGES = [
   'IMG_8161.jpeg',
   'IMG_4953.jpeg',
   'IMG_3.jpeg',
@@ -13,6 +14,16 @@ const HERO_IMAGES = [
   'IMG_8166.jpeg',
   'IMG_4955.jpeg',
   'IMG_8169.jpeg',
+]
+
+// Mobile hero images (in mobile subfolder)
+const MOBILE_HERO_IMAGES = [
+  'mobile/1.jpeg',
+  'mobile/2.jpeg',
+  'mobile/3.jpeg',
+  'mobile/4.jpeg',
+  'mobile/5.jpeg',
+  'mobile/6.jpeg',
 ]
 
 const SERVICES = [
@@ -88,6 +99,7 @@ export default function Home() {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [bookingAnimation, setBookingAnimation] = useState(null) // 'logo' | 'fade' | 'confirm' | null
   const [selectedAddons, setSelectedAddons] = useState([])
+  const [isMobile, setIsMobile] = useState(false)
   
   // Dynamic data from database
   const [salons, setSalons] = useState([])
@@ -95,6 +107,22 @@ export default function Home() {
   const [loadingSlots, setLoadingSlots] = useState(false)
   
   const dates = generateDates()
+  
+  // Get current hero images based on device type
+  const HERO_IMAGES = isMobile ? MOBILE_HERO_IMAGES : DESKTOP_HERO_IMAGES
+
+  // Detect mobile device
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)')
+    setIsMobile(mediaQuery.matches)
+    
+    const handler = (e) => {
+      setIsMobile(e.matches)
+      setCurrentSlide(0) // Reset slide when switching device type
+    }
+    mediaQuery.addEventListener('change', handler)
+    return () => mediaQuery.removeEventListener('change', handler)
+  }, [])
 
   // Load salons and barbers from database on mount
   useEffect(() => {
@@ -248,11 +276,12 @@ export default function Home() {
 
   // Auto-slide every 3 seconds
   useEffect(() => {
+    const imageCount = isMobile ? MOBILE_HERO_IMAGES.length : DESKTOP_HERO_IMAGES.length
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HERO_IMAGES.length)
+      setCurrentSlide((prev) => (prev + 1) % imageCount)
     }, 3000)
     return () => clearInterval(timer)
-  }, [])
+  }, [isMobile])
 
   // Show navbar only when at very top of page
   useEffect(() => {
