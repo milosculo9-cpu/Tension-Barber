@@ -823,7 +823,7 @@ export default function Home() {
         >
           <div 
             className="bg-zinc-900 p-4 md:p-8 rounded-lg max-w-md w-full animate-slide-up my-auto"
-            onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-4">
               <div>
@@ -914,7 +914,8 @@ export default function Home() {
                   type="email"
                   required
                   placeholder="Email adresa *"
-                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition"
+                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-base focus:border-white focus:outline-none transition"
+                  style={{ fontSize: '16px' }}
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />
@@ -924,7 +925,8 @@ export default function Home() {
                   type="text"
                   required
                   placeholder="Ime *"
-                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition"
+                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-base focus:border-white focus:outline-none transition"
+                  style={{ fontSize: '16px' }}
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
@@ -934,7 +936,8 @@ export default function Home() {
                   type="tel"
                   required
                   placeholder="Telefon *"
-                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition"
+                  className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-base focus:border-white focus:outline-none transition"
+                  style={{ fontSize: '16px' }}
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
@@ -942,89 +945,41 @@ export default function Home() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Datum rođenja (za popust)</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {/* Day Dropdown */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === 'day' ? null : 'day'); }}
-                      className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm text-center flex items-center justify-between"
-                    >
-                      <span className="flex-1">{form.birthDay || 'Dan'}</span>
-                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {openDropdown === 'day' && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-zinc-700 rounded max-h-40 overflow-y-auto z-50" onClick={(e) => e.stopPropagation()}>
-                        {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                          <button
-                            key={day}
-                            type="button"
-                            onClick={() => { setForm({ ...form, birthDay: day.toString().padStart(2, '0') }); setOpenDropdown(null); }}
-                            className="w-full px-3 py-2 text-sm text-left hover:bg-zinc-800"
-                          >
-                            {day}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Day Button */}
+                  <button
+                    type="button"
+                    onClick={() => setOpenDropdown('day')}
+                    className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm text-center flex items-center justify-between"
+                  >
+                    <span className="flex-1">{form.birthDay || 'Dan'}</span>
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                   
-                  {/* Month Dropdown */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === 'month' ? null : 'month'); }}
-                      className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm text-center flex items-center justify-between"
-                    >
-                      <span className="flex-1">{form.birthMonth ? ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'][parseInt(form.birthMonth) - 1] : 'Mesec'}</span>
-                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {openDropdown === 'month' && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-zinc-700 rounded max-h-40 overflow-y-auto z-50" onClick={(e) => e.stopPropagation()}>
-                        {['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'].map((month, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => { setForm({ ...form, birthMonth: (i + 1).toString().padStart(2, '0') }); setOpenDropdown(null); }}
-                            className="w-full px-3 py-2 text-sm text-left hover:bg-zinc-800"
-                          >
-                            {month}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Month Button */}
+                  <button
+                    type="button"
+                    onClick={() => setOpenDropdown('month')}
+                    className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm text-center flex items-center justify-between"
+                  >
+                    <span className="flex-1">{form.birthMonth ? ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'][parseInt(form.birthMonth) - 1] : 'Mesec'}</span>
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                   
-                  {/* Year Dropdown */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === 'year' ? null : 'year'); }}
-                      className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm text-center flex items-center justify-between"
-                    >
-                      <span className="flex-1">{form.birthYear || 'Godina'}</span>
-                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {openDropdown === 'year' && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-zinc-700 rounded max-h-40 overflow-y-auto z-50" onClick={(e) => e.stopPropagation()}>
-                        {Array.from({ length: 80 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                          <button
-                            key={year}
-                            type="button"
-                            onClick={() => { setForm({ ...form, birthYear: year.toString() }); setOpenDropdown(null); }}
-                            className="w-full px-3 py-2 text-sm text-left hover:bg-zinc-800"
-                          >
-                            {year}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Year Button */}
+                  <button
+                    type="button"
+                    onClick={() => setOpenDropdown('year')}
+                    className="w-full bg-black border border-zinc-700 rounded px-2 py-2.5 text-sm text-center flex items-center justify-between"
+                  >
+                    <span className="flex-1">{form.birthYear || 'Godina'}</span>
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 </div>
               </div>
               <button
@@ -1035,6 +990,98 @@ export default function Home() {
                 {isSubmitting ? 'ČEKAJTE...' : 'POTVRDI REZERVACIJU'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== DATE PICKER MODAL ==================== */}
+      {openDropdown && ['day', 'month', 'year'].includes(openDropdown) && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setOpenDropdown(null)}
+        >
+          <div 
+            className="bg-zinc-900 rounded-2xl w-full max-w-xs max-h-[70vh] overflow-hidden animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-zinc-700 text-center">
+              <h3 className="font-medium text-lg">
+                {openDropdown === 'day' && 'Izaberi dan'}
+                {openDropdown === 'month' && 'Izaberi mesec'}
+                {openDropdown === 'year' && 'Izaberi godinu'}
+              </h3>
+            </div>
+            <div className="overflow-y-auto max-h-[50vh] p-2">
+              {openDropdown === 'day' && (
+                <div className="grid grid-cols-5 gap-2">
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => { 
+                        setForm({ ...form, birthDay: day.toString().padStart(2, '0') }); 
+                        setOpenDropdown(null); 
+                      }}
+                      className={`p-3 rounded-lg text-center text-lg font-medium transition
+                        ${form.birthDay === day.toString().padStart(2, '0') 
+                          ? 'bg-white text-black' 
+                          : 'bg-zinc-800 hover:bg-zinc-700'}`}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {openDropdown === 'month' && (
+                <div className="grid grid-cols-3 gap-2">
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'].map((month, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => { 
+                        setForm({ ...form, birthMonth: (i + 1).toString().padStart(2, '0') }); 
+                        setOpenDropdown(null); 
+                      }}
+                      className={`p-3 rounded-lg text-center font-medium transition
+                        ${form.birthMonth === (i + 1).toString().padStart(2, '0') 
+                          ? 'bg-white text-black' 
+                          : 'bg-zinc-800 hover:bg-zinc-700'}`}
+                    >
+                      {month}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {openDropdown === 'year' && (
+                <div className="grid grid-cols-4 gap-2">
+                  {Array.from({ length: 80 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => { 
+                        setForm({ ...form, birthYear: year.toString() }); 
+                        setOpenDropdown(null); 
+                      }}
+                      className={`p-2.5 rounded-lg text-center text-sm font-medium transition
+                        ${form.birthYear === year.toString() 
+                          ? 'bg-white text-black' 
+                          : 'bg-zinc-800 hover:bg-zinc-700'}`}
+                    >
+                      {year}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t border-zinc-700">
+              <button
+                type="button"
+                onClick={() => setOpenDropdown(null)}
+                className="w-full py-3 rounded-lg bg-zinc-800 text-white font-medium"
+              >
+                Zatvori
+              </button>
+            </div>
           </div>
         </div>
       )}
