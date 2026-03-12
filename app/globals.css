@@ -98,6 +98,21 @@ body {
   background: #fff;
 }
 
+/* Select dropdowns */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23999'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 32px !important;
+}
+
+select option {
+  background: #111;
+  color: white;
+  padding: 10px;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -120,6 +135,11 @@ body {
   50% { transform: translateY(5px); }
 }
 
+@keyframes pulseLogo {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.98); }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.2s ease;
 }
@@ -130,6 +150,10 @@ body {
 
 .animate-bounce-slow {
   animation: bounce 2s infinite;
+}
+
+.animate-pulse-logo {
+  animation: pulseLogo 2s ease-in-out infinite;
 }
 
 /* Scrollbar */
