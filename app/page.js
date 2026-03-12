@@ -34,6 +34,20 @@ const SERVICES = [
   { id: 16, name: 'Tension All Inclusive', price: 3500 },
 ]
 
+// Additional services that can be added to haircut
+const ADDON_SERVICES = [
+  { id: 101, name: 'Oblikovanje obrva britvom', price: 300 },
+  { id: 102, name: 'Vosak nos', price: 300 },
+  { id: 103, name: 'Vosak uši', price: 300 },
+  { id: 104, name: 'Pranje kose', price: 350 },
+  { id: 105, name: 'Konture brade', price: 350 },
+  { id: 106, name: 'Oblikovanje obrva koncem', price: 400 },
+  { id: 107, name: 'Trimovanje i konture brade', price: 600 },
+]
+
+// Services that trigger addon selection (contain "šišanje" or are haircut packages)
+const SISANJE_SERVICE_IDS = [1, 2, 3, 15] // Fejd, Duža kosa, Zatvorski, Vanredno
+
 // Generate dates for next 2 weeks
 function generateDates() {
   const dates = []
@@ -73,6 +87,7 @@ export default function Home() {
   const [confirmedBooking, setConfirmedBooking] = useState(null)
   const [openDropdown, setOpenDropdown] = useState(null)
   const [bookingAnimation, setBookingAnimation] = useState(null) // 'logo' | 'fade' | 'confirm' | null
+  const [selectedAddons, setSelectedAddons] = useState([])
   
   // Dynamic data from database
   const [salons, setSalons] = useState([])
@@ -279,14 +294,22 @@ export default function Home() {
     
     setIsSubmitting(true)
 
+    // Calculate total service name and price including addons
+    const addonNames = selectedAddons.map(a => a.name).join(', ')
+    const addonTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0)
+    const fullServiceName = addonNames 
+      ? `${selectedService.name} + ${addonNames}`
+      : selectedService.name
+    const fullServicePrice = (selectedService.price || 0) + addonTotal
+
     try {
       const { data, error } = await supabase
         .from('appointments')
         .insert([
           {
             barber_id: selectedBarber.id,
-            service_name: selectedService.name,
-            service_price: selectedService.price,
+            service_name: fullServiceName,
+            service_price: fullServicePrice,
             customer_name: form.name,
             customer_email: form.email,
             customer_phone: form.phone,
@@ -319,7 +342,11 @@ export default function Home() {
       localStorage.setItem('tensionBarberCustomer', JSON.stringify(form))
 
       setConfirmedBooking({
-        service: selectedService,
+        service: { 
+          name: fullServiceName, 
+          price: fullServicePrice,
+          addons: selectedAddons 
+        },
         barber: selectedBarber,
         date: selectedDate,
         time: selectedTime
@@ -327,6 +354,7 @@ export default function Home() {
 
       setShowForm(false)
       setSelectedService(null)
+      setSelectedAddons([])
       
       // Animation sequence: logo (1s) -> fade out (0.5s) -> show confirmation
       setBookingAnimation('logo')
@@ -711,7 +739,7 @@ export default function Home() {
       {showForm && (
         <div 
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-3 animate-fade-in overflow-y-auto"
-          onClick={() => { setShowForm(false); setOpenDropdown(null); }}
+          onClick={() => { setShowForm(false); setOpenDropdown(null); setSelectedAddons([]); }}
         >
           <div 
             className="bg-zinc-900 p-4 md:p-8 rounded-lg max-w-md w-full animate-slide-up my-auto"
@@ -725,7 +753,7 @@ export default function Home() {
                 </p>
               </div>
               <button 
-                onClick={() => { setShowForm(false); setOpenDropdown(null); }} 
+                onClick={() => { setShowForm(false); setOpenDropdown(null); setSelectedAddons([]); }} 
                 className="text-gray-500 hover:text-white text-2xl leading-none"
               >
                 ×
@@ -742,6 +770,7 @@ export default function Home() {
                   onChange={(e) => {
                     const service = SERVICES.find(s => s.id === parseInt(e.target.value))
                     setSelectedService(service)
+                    setSelectedAddons([]) // Reset addons when service changes
                   }}
                 >
                   <option value="">-- Izaberite uslugu --</option>
@@ -752,6 +781,54 @@ export default function Home() {
                   ))}
                 </select>
               </div>
+              
+              {/* Addon services - only show for haircut services */}
+              {selectedService && SISANJE_SERVICE_IDS.includes(selectedService.id) && (
+                <div className="bg-zinc-800/50 rounded-lg p-3">
+                  <label className="text-xs text-gray-400 block mb-2">Dodatne usluge (opciono)</label>
+                  <div className="space-y-1.5">
+                    {ADDON_SERVICES.map((addon) => {
+                      const isSelected = selectedAddons.some(a => a.id === addon.id)
+                      return (
+                        <button
+                          key={addon.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedAddons(selectedAddons.filter(a => a.id !== addon.id))
+                            } else {
+                              setSelectedAddons([...selectedAddons, addon])
+                            }
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded text-sm transition
+                            ${isSelected 
+                              ? 'bg-white text-black' 
+                              : 'bg-black/50 text-white hover:bg-black/70'}`}
+                        >
+                          <span>{addon.name}</span>
+                          <span className="flex items-center gap-2">
+                            <span className={isSelected ? 'text-black/70' : 'text-gray-400'}>
+                              {addon.price} RSD
+                            </span>
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold
+                              ${isSelected ? 'bg-black text-white' : 'bg-white/20 text-white'}`}>
+                              {isSelected ? '✓' : '+'}
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {selectedAddons.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-zinc-700 flex justify-between text-sm">
+                      <span className="text-gray-400">Dodatno:</span>
+                      <span className="text-white font-medium">
+                        +{selectedAddons.reduce((sum, a) => sum + a.price, 0).toLocaleString()} RSD
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <input
                   type="email"
