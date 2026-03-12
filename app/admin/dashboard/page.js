@@ -603,7 +603,19 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {appointments.filter(a => a.status !== 'cancelled').map(apt => (
-                  <div key={apt.id} className="bg-white/5 rounded-lg p-4">
+                  <div 
+                    key={apt.id} 
+                    className={`rounded-lg p-4 ${
+                      apt.status === 'needs_call' 
+                        ? 'bg-gradient-to-r from-orange-500/20 to-orange-600/10 border border-orange-500/30' 
+                        : 'bg-white/5'
+                    }`}
+                  >
+                    {apt.status === 'needs_call' && (
+                      <div className="flex items-center gap-2 mb-2 text-orange-400 text-xs font-medium">
+                        <span>📞</span> POZOVI KLIJENTA
+                      </div>
+                    )}
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium">{apt.customer_name}</p>
@@ -612,7 +624,9 @@ export default function Dashboard() {
                           {new Date(apt.appointment_date).toLocaleDateString('sr-RS')} • {apt.appointment_time?.slice(0, 5)}
                         </p>
                         {apt.customer_phone && (
-                          <a href={`tel:${apt.customer_phone}`} className="text-white/40 text-sm hover:text-white">
+                          <a href={`tel:${apt.customer_phone}`} className={`text-sm mt-1 inline-block ${
+                            apt.status === 'needs_call' ? 'text-orange-300 font-medium' : 'text-white/40 hover:text-white'
+                          }`}>
                             📞 {apt.customer_phone}
                           </a>
                         )}
