@@ -8,8 +8,8 @@ const STORAGE_URL = 'https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/
 
 const generateTimeSlots = (locationName, duration = 30) => {
   const slots = [];
-  const startHour = 10;
-  const endHour = locationName?.includes('Petra') ? 18 : 22;
+  const startHour = 0;  // 00:00
+  const endHour = 24;   // 24:00
   
   // Convert to minutes for easier calculation
   const startMinutes = startHour * 60;
@@ -63,12 +63,24 @@ export default function Dashboard() {
   const [showPastAppointments, setShowPastAppointments] = useState(null); // 'today' | 'total' | null
   const [pastAppointments, setPastAppointments] = useState([]);
   const [slotDuration, setSlotDuration] = useState(30); // default 30 minutes
+  const [bookedSlots, setBookedSlots] = useState([]); // slots that are booked (green)
+  
+  // Manual booking form
+  const [showManualBooking, setShowManualBooking] = useState(false);
+  const [manualBookingSlot, setManualBookingSlot] = useState(null);
+  const [manualBookingForm, setManualBookingForm] = useState({ name: '', phone: '' });
+  
+  // Service management
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServicePrice, setNewServicePrice] = useState('');
+  const [showAddService, setShowAddService] = useState(false);
+  
   const [editingService, setEditingService] = useState(null);
   const [editingBarber, setEditingBarber] = useState(null);
   const [showAddBarber, setShowAddBarber] = useState(false);
   const [newBarberName, setNewBarberName] = useState('');
   const [newBarberLocation, setNewBarberLocation] = useState('');
-  const [newServicePrice, setNewServicePrice] = useState('');
+  const [editServicePrice, setEditServicePrice] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imgErrors, setImgErrors] = useState({});
   
@@ -141,11 +153,11 @@ export default function Dashboard() {
     }
   }, [selectedDate, barber]);
 
-  // Real-time subscription for new appointments
+  // Real-time subscription for new appointments and slot changes
   useEffect(() => {
     if (!barber) return;
 
-    const channel = supabase
+    const appointmentsChannel = supabase
       .channel('appointments-changes')
       .on(
         'postgres_changes',
@@ -160,6 +172,7 @@ export default function Dashboard() {
           setNewAppointmentAlert(payload.new);
           loadAppointments();
           loadStats(barber.id);
+          loadSlotsForDate(); // Reload slots to show booked
           setTimeout(() => setNewAppointmentAlert(null), 5000);
         }
       )
@@ -178,10 +191,27 @@ export default function Dashboard() {
       )
       .subscribe();
 
+    const slotsChannel = supabase
+      .channel('slots-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'barber_available_slots',
+          filter: `barber_id=eq.${barber.id}`
+        },
+        () => {
+          loadSlotsForDate(); // Reload slots on any change
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(appointmentsChannel);
+      supabase.removeChannel(slotsChannel);
     };
-  }, [barber]);
+  }, [barber, selectedDate]);
 
   const loadBarberData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -215,8 +245,8 @@ export default function Dashboard() {
   };
 
   const loadServices = async () => {
-    const { data } = await supabase.from('services').select('*').order('price');
-    if (data) setServices(data);
+    const { data } = await supabase.from('services').select('*').order('display_order');
+    if (data) setServices(data.map(s => ({ ...s, price: s.price ? parseFloat(s.price) : null })));
   };
 
   const loadAllBarbers = async () => {
@@ -279,9 +309,11 @@ export default function Dashboard() {
       .eq('slot_date', dateStr);
 
     if (data) {
-      setAvailableSlots(data.map(s => s.slot_time.slice(0, 5)));
+      setAvailableSlots(data.filter(s => !s.is_booked).map(s => s.slot_time.slice(0, 5)));
+      setBookedSlots(data.filter(s => s.is_booked).map(s => s.slot_time.slice(0, 5)));
     } else {
       setAvailableSlots([]);
+      setBookedSlots([]);
     }
   };
 
@@ -400,6 +432,84 @@ export default function Dashboard() {
     setSaving(false);
   };
 
+  // Manual booking by barber
+  const handleManualBooking = async (e) => {
+    e.preventDefault();
+    if (!manualBookingSlot || !manualBookingForm.name || !manualBookingForm.phone) return;
+    
+    setSaving(true);
+    const dateStr = formatDate(selectedDate);
+    
+    // Create appointment
+    await supabase
+      .from('appointments')
+      .insert({
+        barber_id: barber.id,
+        service_name: 'Ručna rezervacija',
+        service_price: 0,
+        customer_name: manualBookingForm.name,
+        customer_phone: manualBookingForm.phone,
+        appointment_date: dateStr,
+        appointment_time: manualBookingSlot + ':00',
+        status: 'confirmed'
+      });
+    
+    // Mark slot as booked
+    await supabase
+      .from('barber_available_slots')
+      .update({ is_booked: true })
+      .eq('barber_id', barber.id)
+      .eq('slot_date', dateStr)
+      .eq('slot_time', manualBookingSlot + ':00');
+    
+    // Reset form
+    setShowManualBooking(false);
+    setManualBookingSlot(null);
+    setManualBookingForm({ name: '', phone: '' });
+    
+    loadSlotsForDate();
+    loadAppointments();
+    loadStats(barber.id);
+    setSaving(false);
+  };
+
+  // Add new service
+  const addService = async () => {
+    if (!newServiceName.trim()) return;
+    
+    const price = newServicePrice ? parseInt(newServicePrice) : null;
+    
+    await supabase
+      .from('services')
+      .insert({
+        name: newServiceName.trim(),
+        price: price,
+        display_order: services.length + 1
+      });
+    
+    setNewServiceName('');
+    setNewServicePrice('');
+    setShowAddService(false);
+    
+    // Reload services
+    const { data } = await supabase.from('services').select('*').order('display_order');
+    if (data) setServices(data.map(s => ({ ...s, price: s.price ? parseFloat(s.price) : null })));
+  };
+
+  // Delete service
+  const deleteService = async (serviceId) => {
+    if (!confirm('Obrisati ovu uslugu?')) return;
+    
+    await supabase
+      .from('services')
+      .delete()
+      .eq('id', serviceId);
+    
+    // Reload services
+    const { data } = await supabase.from('services').select('*').order('display_order');
+    if (data) setServices(data.map(s => ({ ...s, price: s.price ? parseFloat(s.price) : null })));
+  };
+
   const cancelAppointment = async (appointmentId) => {
     if (!confirm('Otkazati ovu rezervaciju?')) return;
     
@@ -442,9 +552,9 @@ export default function Dashboard() {
   };
 
   const updateServicePrice = async () => {
-    if (!editingService || !newServicePrice) return;
+    if (!editingService || !editServicePrice) return;
     
-    const price = parseInt(newServicePrice);
+    const price = parseInt(editServicePrice);
     if (isNaN(price)) return;
     
     await supabase
@@ -453,7 +563,7 @@ export default function Dashboard() {
       .eq('id', editingService.id);
     
     setEditingService(null);
-    setNewServicePrice('');
+    setEditServicePrice('');
     loadServices();
   };
 
@@ -661,15 +771,27 @@ export default function Dashboard() {
               <div className="grid grid-cols-4 gap-2">
                 {timeSlots.map(time => {
                   const isAvailable = availableSlots.includes(time);
+                  const isBooked = bookedSlots.includes(time);
                   return (
                     <button
                       key={time}
-                      onClick={() => toggleSlot(time)}
-                      disabled={saving || slotsLocked}
+                      onClick={() => {
+                        if (isBooked) return; // Can't toggle booked slots
+                        if (slotsLocked && isAvailable) {
+                          // Open manual booking
+                          setManualBookingSlot(time);
+                          setShowManualBooking(true);
+                        } else {
+                          toggleSlot(time);
+                        }
+                      }}
+                      disabled={saving || (slotsLocked && !isAvailable && !isBooked)}
                       className={`py-3 rounded text-sm font-medium transition-all
-                        ${isAvailable ? 'bg-white text-black' : 'bg-white/5 text-white/40'}
+                        ${isBooked ? 'bg-green-600 text-white' : ''}
+                        ${isAvailable && !isBooked ? 'bg-white text-black' : ''}
+                        ${!isAvailable && !isBooked ? 'bg-white/5 text-white/40' : ''}
                         ${saving ? 'opacity-50' : ''}
-                        ${slotsLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        ${isBooked ? 'cursor-default' : ''}`}
                     >
                       {time}
                     </button>
@@ -677,8 +799,13 @@ export default function Dashboard() {
                 })}
               </div>
               
+              <div className="flex gap-4 mt-3 justify-center text-xs">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-white rounded"></span> Slobodan</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-600 rounded"></span> Zakazan</span>
+              </div>
+              
               {slotsLocked && (
-                <p className="text-green-400 text-xs mt-3 text-center">✓ Termini su zakljucani</p>
+                <p className="text-green-400 text-xs mt-3 text-center">✓ Termini su zakljucani - klikni na slobodan termin za rucno zakazivanje</p>
               )}
             </section>
 
@@ -819,17 +946,60 @@ export default function Dashboard() {
                 
                 {adminSection === 'cenovnik' && (
                   <div>
-                    <h2 className="text-white/40 text-xs tracking-wider mb-4">CENOVNIK</h2>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-white/40 text-xs tracking-wider">CENOVNIK</h2>
+                      <button onClick={() => setShowAddService(true)} className="text-xs bg-white text-black px-3 py-1 rounded">
+                        + DODAJ
+                      </button>
+                    </div>
+                    
+                    {showAddService && (
+                      <div className="bg-white/10 rounded-lg p-4 mb-4 space-y-3">
+                        <input
+                          type="text"
+                          value={newServiceName}
+                          onChange={(e) => setNewServiceName(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                          placeholder="Naziv usluge"
+                        />
+                        <input
+                          type="number"
+                          value={newServicePrice}
+                          onChange={(e) => setNewServicePrice(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                          placeholder="Cena (ostaviti prazno za 'po dogovoru')"
+                        />
+                        <div className="flex gap-2">
+                          <button onClick={() => setShowAddService(false)} className="flex-1 py-2 rounded bg-white/10 text-white text-sm">
+                            Otkaži
+                          </button>
+                          <button onClick={addService} className="flex-1 py-2 rounded bg-white text-black text-sm font-medium">
+                            Dodaj
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="space-y-2">
                       {services.map(service => (
-                        <button
+                        <div
                           key={service.id}
-                          onClick={() => { setEditingService(service); setNewServicePrice(service.price?.toString() || ''); }}
-                          className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center text-left"
+                          className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center"
                         >
-                          <span className="text-sm">{service.name}</span>
-                          <span className="text-white/50">{service.price?.toLocaleString()} RSD</span>
-                        </button>
+                          <button
+                            onClick={() => { setEditingService(service); setEditServicePrice(service.price?.toString() || ''); }}
+                            className="flex-1 flex justify-between items-center text-left"
+                          >
+                            <span className="text-sm">{service.name}</span>
+                            <span className="text-white/50">{service.price ? `${service.price.toLocaleString()} RSD` : 'po dogovoru'}</span>
+                          </button>
+                          <button
+                            onClick={() => deleteService(service.id)}
+                            className="ml-3 text-red-400 hover:text-red-300 p-1"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -985,14 +1155,14 @@ export default function Dashboard() {
               <label className="block text-white/40 text-xs mb-2">CENA (RSD)</label>
               <input
                 type="number"
-                value={newServicePrice}
-                onChange={(e) => setNewServicePrice(e.target.value)}
+                value={editServicePrice}
+                onChange={(e) => setEditServicePrice(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg"
               />
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { setEditingService(null); setNewServicePrice(''); }}
+                onClick={() => { setEditingService(null); setEditServicePrice(''); }}
                 className="flex-1 bg-white/10 text-white py-3 rounded-lg"
               >
                 OTKAZI
@@ -1073,6 +1243,66 @@ export default function Dashboard() {
                 </span>
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Booking Modal */}
+      {showManualBooking && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowManualBooking(false)}
+        >
+          <div 
+            className="bg-zinc-900 rounded-xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-zinc-700">
+              <h3 className="font-medium text-lg">Zakaži termin</h3>
+              <p className="text-white/50 text-sm">
+                {formatDate(selectedDate)} u {manualBookingSlot}
+              </p>
+            </div>
+            <form onSubmit={handleManualBooking} className="p-4 space-y-4">
+              <div>
+                <label className="block text-white/50 text-xs mb-1">Ime klijenta</label>
+                <input
+                  type="text"
+                  value={manualBookingForm.name}
+                  onChange={(e) => setManualBookingForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                  placeholder="Ime i prezime"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-white/50 text-xs mb-1">Telefon</label>
+                <input
+                  type="tel"
+                  value={manualBookingForm.phone}
+                  onChange={(e) => setManualBookingForm(prev => ({ ...prev, phone: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                  placeholder="06x xxx xxxx"
+                  required
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowManualBooking(false)}
+                  className="flex-1 py-3 rounded-lg bg-white/10 text-white"
+                >
+                  Otkaži
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 py-3 rounded-lg bg-white text-black font-medium"
+                >
+                  {saving ? 'Čuvanje...' : 'Zakaži'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
