@@ -109,11 +109,34 @@ export default function Home() {
   const [salons, setSalons] = useState([])
   const [availableSlots, setAvailableSlots] = useState({})
   const [loadingSlots, setLoadingSlots] = useState(false)
+  const [priceList, setPriceList] = useState([])
   
   const dates = generateDates()
   
   // Get current hero images based on device type
   const HERO_IMAGES = isMobile ? MOBILE_HERO_IMAGES : DESKTOP_HERO_IMAGES
+
+  // Load price list from database
+  useEffect(() => {
+    const loadPriceList = async () => {
+      const { data } = await supabase
+        .from('services')
+        .select('*')
+        .order('display_order')
+      if (data) setPriceList(data.map(s => ({ ...s, price: s.price ? parseFloat(s.price) : null })))
+    }
+    loadPriceList()
+
+    // Realtime subscription for price list changes
+    const channel = supabase
+      .channel('services-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => {
+        loadPriceList()
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [])
 
   // Detect mobile device
   useEffect(() => {
@@ -669,28 +692,21 @@ export default function Home() {
                         {timeSlots.length === 0 ? (
                           <p className="text-gray-600 text-sm text-center py-4">Nema slobodnih termina</p>
                         ) : (
-                          <>
-                            <div className="grid grid-cols-4 gap-2">
-                              {timeSlots.slice(0, 8).map((time, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => {
-                                    setSelectedBarber(barber)
-                                    setSelectedTime(time)
-                                    setShowForm(true)
-                                  }}
-                                  className="time-btn py-2 text-xs rounded"
-                                >
-                                  {time}
-                                </button>
-                              ))}
-                            </div>
-                            {timeSlots.length > 8 && (
-                              <p className="text-xs text-gray-600 mt-3 text-center">
-                                + još {timeSlots.length - 8} termina
-                              </p>
-                            )}
-                          </>
+                          <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto">
+                            {timeSlots.map((time, i) => (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  setSelectedBarber(barber)
+                                  setSelectedTime(time)
+                                  setShowForm(true)
+                                }}
+                                className="time-btn py-2 text-xs rounded"
+                              >
+                                {time}
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -708,31 +724,14 @@ export default function Home() {
           <h2 className="text-center text-xl md:text-2xl font-light tracking-[0.2em] mb-12">CENOVNIK</h2>
           
           <div className="space-y-0">
-            {[
-              { service: 'ŠIŠANJE "FEJD"', price: '1.200' },
-              { service: 'ŠIŠANJE DUŽA KOSA', price: '1.500' },
-              { service: 'ŠIŠANJE ZATVORSKI', price: '800' },
-              { service: 'BRIJANJE GLAVE BRITVOM', price: '800' },
-              { service: 'TRIMOVANJE I KONTURE BRADE', price: '600' },
-              { service: 'KONTURE BRADE', price: '350' },
-              { service: 'OBLIKOVANJE OBRVA KONCEM', price: '400' },
-              { service: 'OBLIKOVANJE OBRVA BRITVOM', price: '300' },
-              { service: 'PRANJE KOSE', price: '350' },
-              { service: 'VOSAK UŠI', price: '300' },
-              { service: 'VOSAK NOS', price: '300' },
-              { service: 'FARBANJE KOSE', price: '***' },
-              { service: 'FARBANJE BRADE', price: '***' },
-              { service: 'TENSION FULL PAKET', price: '3.000' },
-              { service: '"VANREDNO" ŠIŠANJE', price: '1.500' },
-              { service: 'TENSION ALL INCLUSIVE', price: '3.500' },
-            ].map((item, i) => (
+            {priceList.map((item) => (
               <div 
-                key={i} 
+                key={item.id} 
                 className="flex justify-between items-center py-4 border-b border-zinc-800"
               >
-                <span className="text-sm md:text-base text-gray-300">{item.service}</span>
+                <span className="text-sm md:text-base text-gray-300">{item.name.toUpperCase()}</span>
                 <span className="text-sm md:text-base text-white font-medium">
-                  {item.price === '***' ? '***' : `${item.price} RSD`}
+                  {item.price ? `${item.price.toLocaleString()} RSD` : '***'}
                 </span>
               </div>
             ))}
@@ -779,12 +778,14 @@ export default function Home() {
                 </svg>
               </div>
               <h3 className="font-medium text-sm tracking-wider mb-4">ADRESE</h3>
-              <div className="text-sm space-y-3">
+              <div className="text-sm space-y-4">
                 <div>
+                  <p className="text-gray-400 text-xs mb-1">TENSION BARBER</p>
                   <p className="text-white">Bulevar kralja Petra I 85</p>
                   <p className="text-gray-500">Novi Sad</p>
                 </div>
                 <div>
+                  <p className="text-gray-400 text-xs mb-1">TENSION BARBER TELEP</p>
                   <p className="text-white">Bulevar patrijarha Pavla 117</p>
                   <p className="text-gray-500">Novi Sad</p>
                 </div>
@@ -805,8 +806,8 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="text-gray-400">Email</p>
-                  <a href="mailto:tension.barbershop1@gmail.com" className="text-white text-xs hover:underline">
-                    tension.barbershop1@gmail.com
+                  <a href="mailto:info@tension-barber.rs" className="text-white text-xs hover:underline">
+                    info@tension-barber.rs
                   </a>
                 </div>
               </div>
