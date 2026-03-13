@@ -6,17 +6,28 @@ import { useRouter } from 'next/navigation';
 
 const STORAGE_URL = 'https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public';
 
-const generateTimeSlots = (locationName) => {
+const generateTimeSlots = (locationName, duration = 30) => {
   const slots = [];
   const startHour = 10;
   const endHour = locationName?.includes('Petra') ? 18 : 22;
   
-  for (let hour = startHour; hour < endHour; hour++) {
-    slots.push(`${hour.toString().padStart(2, '0')}:00`);
-    slots.push(`${hour.toString().padStart(2, '0')}:30`);
+  // Convert to minutes for easier calculation
+  const startMinutes = startHour * 60;
+  const endMinutes = endHour * 60;
+  
+  let currentMinutes = startMinutes;
+  
+  while (currentMinutes + duration <= endMinutes) {
+    const hours = Math.floor(currentMinutes / 60);
+    const mins = currentMinutes % 60;
+    slots.push(`${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`);
+    currentMinutes += duration;
   }
+  
   return slots;
 };
+
+const DURATION_OPTIONS = [15, 20, 25, 30, 40, 45, 60];
 
 const formatDate = (date) => date.toISOString().split('T')[0];
 
@@ -51,7 +62,7 @@ export default function Dashboard() {
   const [newAppointmentAlert, setNewAppointmentAlert] = useState(null);
   const [showPastAppointments, setShowPastAppointments] = useState(null); // 'today' | 'total' | null
   const [pastAppointments, setPastAppointments] = useState([]);
-  
+  const [slotDuration, setSlotDuration] = useState(30); // default 30 minutes
   const [editingService, setEditingService] = useState(null);
   const [editingBarber, setEditingBarber] = useState(null);
   const [showAddBarber, setShowAddBarber] = useState(false);
@@ -218,9 +229,49 @@ export default function Dashboard() {
     if (data) setLocations(data);
   };
 
+  const saveSlotDuration = async (duration) => {
+    const dateStr = formatDate(selectedDate);
+    setSlotDuration(duration);
+    
+    // Upsert duration setting
+    await supabase
+      .from('barber_slot_settings')
+      .upsert({
+        barber_id: barber.id,
+        slot_date: dateStr,
+        slot_duration: duration
+      }, {
+        onConflict: 'barber_id,slot_date'
+      });
+    
+    // Clear existing slots when duration changes
+    await supabase
+      .from('barber_available_slots')
+      .delete()
+      .eq('barber_id', barber.id)
+      .eq('slot_date', dateStr);
+    
+    setAvailableSlots([]);
+  };
+
   const loadSlotsForDate = async () => {
     const dateStr = formatDate(selectedDate);
     
+    // Load slot duration first
+    const { data: durationData } = await supabase
+      .from('barber_slot_settings')
+      .select('slot_duration')
+      .eq('barber_id', barber.id)
+      .eq('slot_date', dateStr)
+      .single();
+    
+    if (durationData) {
+      setSlotDuration(durationData.slot_duration);
+    } else {
+      setSlotDuration(30);
+    }
+    
+    // Load available slots
     const { data } = await supabase
       .from('barber_available_slots')
       .select('*')
@@ -313,7 +364,7 @@ export default function Dashboard() {
     
     setSaving(true);
     const dateStr = formatDate(selectedDate);
-    const allSlots = generateTimeSlots(barber.locations?.name);
+    const allSlots = generateTimeSlots(barber.locations?.name, slotDuration);
     
     await supabase
       .from('barber_available_slots')
@@ -488,7 +539,7 @@ export default function Dashboard() {
     );
   }
 
-  const timeSlots = generateTimeSlots(barber.locations?.name);
+  const timeSlots = generateTimeSlots(barber.locations?.name, slotDuration);
   const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
 
   return (
@@ -567,6 +618,27 @@ export default function Dashboard() {
                   );
                 })}
               </div>
+            </section>
+
+            <section>
+              <h2 className="text-white/40 text-xs tracking-wider mb-3">TRAJANJE TERMINA</h2>
+              <div className="grid grid-cols-7 gap-2">
+                {DURATION_OPTIONS.map(duration => (
+                  <button
+                    key={duration}
+                    onClick={() => saveSlotDuration(duration)}
+                    disabled={slotsLocked}
+                    className={`py-3 rounded text-sm font-medium transition-all
+                      ${slotDuration === duration ? 'bg-white text-black' : 'bg-white/5 text-white/40'}
+                      ${slotsLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    {duration === 60 ? '1h' : `${duration}`}
+                  </button>
+                ))}
+              </div>
+              <p className="text-white/30 text-xs mt-2 text-center">
+                Trenutno: {slotDuration === 60 ? '1 sat' : `${slotDuration} min`}
+              </p>
             </section>
 
             <section>
