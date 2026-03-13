@@ -59,6 +59,9 @@ const ADDON_SERVICES = [
 // Services that trigger addon selection (contain "šišanje" or are haircut packages)
 const SISANJE_SERVICE_IDS = [1, 2, 3, 15] // Fejd, Duža kosa, Zatvorski, Vanredno
 
+// Services that REQUIRE double slot (Tension packages)
+const DOUBLE_SLOT_SERVICE_IDS = [14, 16] // Tension Full Paket, Tension All Inclusive
+
 // Generate dates for next 2 weeks
 function generateDates() {
   const dates = []
@@ -100,6 +103,7 @@ export default function Home() {
   const [bookingAnimation, setBookingAnimation] = useState(null) // 'logo' | 'fade' | 'confirm' | null
   const [selectedAddons, setSelectedAddons] = useState([])
   const [isMobile, setIsMobile] = useState(false)
+  const [showNoNextSlotWarning, setShowNoNextSlotWarning] = useState(false)
   
   // Dynamic data from database
   const [salons, setSalons] = useState([])
@@ -312,15 +316,23 @@ export default function Home() {
     }, 150)
   }
 
-  // Helper function to get next time slot
-  const getNextTimeSlot = (currentTime) => {
+  // Helper function to get next time slot based on barber's slot duration
+  const getNextTimeSlot = async (barberId, date, currentTime) => {
+    // Get barber's slot duration for this date
+    const { data: settings } = await supabase
+      .from('barber_slot_settings')
+      .select('slot_duration')
+      .eq('barber_id', barberId)
+      .eq('slot_date', date)
+      .single()
+    
+    const duration = settings?.slot_duration || 30
     const [hours, minutes] = currentTime.split(':').map(Number)
-    let nextMinutes = minutes + 30
-    let nextHours = hours
-    if (nextMinutes >= 60) {
-      nextMinutes = 0
-      nextHours += 1
-    }
+    let totalMinutes = hours * 60 + minutes + duration
+    
+    const nextHours = Math.floor(totalMinutes / 60)
+    const nextMinutes = totalMinutes % 60
+    
     return `${nextHours.toString().padStart(2, '0')}:${nextMinutes.toString().padStart(2, '0')}`
   }
 
@@ -343,15 +355,14 @@ export default function Home() {
       : selectedService.name
     const fullServicePrice = (selectedService.price || 0) + addonTotal
     
-    // If addons are selected, we need the next slot too
-    const needsNextSlot = selectedAddons.length > 0
-    const nextSlotTime = getNextTimeSlot(selectedTime)
-    let nextSlotAvailable = false
-    let bookingStatus = 'confirmed'
+    // Only Tension Full Paket and Tension All Inclusive need double slot
+    const needsDoubleSlot = DOUBLE_SLOT_SERVICE_IDS.includes(selectedService.id)
 
     try {
-      // Check if next slot is available (only if we have addons)
-      if (needsNextSlot) {
+      // If this service needs double slot, check if next slot is available
+      if (needsDoubleSlot) {
+        const nextSlotTime = await getNextTimeSlot(selectedBarber.id, selectedDate.iso, selectedTime)
+        
         const { data: nextSlot } = await supabase
           .from('barber_available_slots')
           .select('*')
@@ -361,11 +372,20 @@ export default function Home() {
           .eq('is_booked', false)
           .single()
         
-        nextSlotAvailable = !!nextSlot
-        
-        if (!nextSlotAvailable) {
-          bookingStatus = 'needs_call'
+        if (!nextSlot) {
+          // No next slot available - show warning and don't create reservation
+          setIsSubmitting(false)
+          setShowNoNextSlotWarning(true)
+          return
         }
+        
+        // Book the next slot too
+        await supabase
+          .from('barber_available_slots')
+          .update({ is_booked: true })
+          .eq('barber_id', selectedBarber.id)
+          .eq('slot_date', selectedDate.iso)
+          .eq('slot_time', nextSlotTime + ':00')
       }
 
       const { data, error } = await supabase
@@ -383,8 +403,8 @@ export default function Home() {
               : null,
             appointment_date: selectedDate.iso,
             appointment_time: selectedTime + ':00',
-            duration_minutes: needsNextSlot ? 60 : 30,
-            status: bookingStatus
+            duration_minutes: needsDoubleSlot ? 60 : 30,
+            status: 'confirmed'
           }
         ])
 
@@ -398,24 +418,10 @@ export default function Home() {
         .eq('slot_date', selectedDate.iso)
         .eq('slot_time', selectedTime + ':00')
 
-      // If we have addons and next slot is available, book it too
-      if (needsNextSlot && nextSlotAvailable) {
-        await supabase
-          .from('barber_available_slots')
-          .update({ is_booked: true })
-          .eq('barber_id', selectedBarber.id)
-          .eq('slot_date', selectedDate.iso)
-          .eq('slot_time', nextSlotTime + ':00')
-      }
-
       // Update local state immediately
-      const slotsToRemove = [selectedTime]
-      if (needsNextSlot && nextSlotAvailable) {
-        slotsToRemove.push(nextSlotTime)
-      }
       setAvailableSlots(prev => ({
         ...prev,
-        [selectedBarber.id]: prev[selectedBarber.id]?.filter(t => !slotsToRemove.includes(t)) || []
+        [selectedBarber.id]: prev[selectedBarber.id]?.filter(t => t !== selectedTime) || []
       }))
 
       localStorage.setItem('tensionBarberCustomer', JSON.stringify(form))
@@ -428,8 +434,7 @@ export default function Home() {
         },
         barber: selectedBarber,
         date: selectedDate,
-        time: selectedTime,
-        needsCall: bookingStatus === 'needs_call'
+        time: selectedTime
       })
 
       setShowForm(false)
@@ -1102,27 +1107,47 @@ export default function Home() {
         </div>
       )}
 
+      {/* ==================== NO NEXT SLOT WARNING ==================== */}
+      {showNoNextSlotWarning && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80"
+          onClick={() => setShowNoNextSlotWarning(false)}
+        >
+          <div 
+            className="bg-gradient-to-br from-orange-500/90 to-orange-700/80 backdrop-blur-sm text-white px-6 py-6 rounded-lg shadow-2xl animate-slide-up max-w-sm w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-3">
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <p className="font-semibold text-xl">Izaberite drugi termin</p>
+                <p className="text-orange-100 text-sm mt-2">
+                  Za ovu uslugu je potrebno više vremena. Molimo izaberite termin koji ima slobodan termin posle sebe.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowNoNextSlotWarning(false)}
+                className="mt-2 w-full py-3 rounded-lg bg-white/20 hover:bg-white/30 transition font-medium"
+              >
+                Razumem
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ==================== CONFIRMATION ==================== */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className={`text-white px-6 py-6 rounded-lg shadow-2xl animate-slide-up max-w-sm w-full
-            ${confirmedBooking?.needsCall 
-              ? 'bg-gradient-to-br from-orange-500/90 to-orange-700/80 backdrop-blur-sm' 
-              : 'bg-green-600'}`}
-          >
+          <div className="bg-green-600 text-white px-6 py-6 rounded-lg shadow-2xl animate-slide-up max-w-sm w-full">
             <div className="flex flex-col items-center text-center gap-3">
-              {confirmedBooking?.needsCall ? (
-                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                </svg>
-              ) : (
-                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
               <div>
-                <p className="font-semibold text-xl">
-                  {confirmedBooking?.needsCall ? 'Zahtev primljen!' : 'Rezervacija potvrđena!'}
+                <p className="font-semibold text-xl">Rezervacija potvrđena!</p>
                 </p>
                 {confirmedBooking && (
                   <div className={`mt-3 text-sm space-y-1 ${confirmedBooking.needsCall ? 'text-orange-100' : 'text-green-100'}`}>
@@ -1135,11 +1160,8 @@ export default function Home() {
                     </p>
                   </div>
                 )}
-                <p className={`text-xs mt-3 ${confirmedBooking?.needsCall ? 'text-orange-200' : 'text-green-200'}`}>
-                  {confirmedBooking?.needsCall 
-                    ? 'Berber će vas pozvati radi dogovora termina.'
-                    : 'Potvrda će biti poslata na email.'
-                  }
+                <p className="text-xs mt-3 text-green-200">
+                  Potvrda će biti poslata na email.
                 </p>
               </div>
             </div>
