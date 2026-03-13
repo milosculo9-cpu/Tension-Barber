@@ -104,16 +104,25 @@ export default function Dashboard() {
   };
 
   // Swipe handler for tabs
+  const datePickerRef = useRef(null);
+  
   useEffect(() => {
     let startX = 0;
     let startY = 0;
+    let touchTarget = null;
     
     const handleTouchStart = (e) => {
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
+      touchTarget = e.target;
     };
 
     const handleTouchEnd = (e) => {
+      // Don't change tabs if swipe started on date picker
+      if (datePickerRef.current && datePickerRef.current.contains(touchTarget)) {
+        return;
+      }
+      
       const endX = e.changedTouches[0].clientX;
       const endY = e.changedTouches[0].clientY;
       
@@ -709,7 +718,7 @@ export default function Dashboard() {
           <div className="space-y-6">
             <section>
               <h2 className="text-white/40 text-xs tracking-wider mb-3">IZABERI DATUM</h2>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              <div ref={datePickerRef} className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                 {days.map((day, i) => {
                   const isSelected = formatDate(day) === formatDate(selectedDate);
                   const isToday = formatDate(day) === formatDate(new Date());
