@@ -167,7 +167,7 @@ export default function Home() {
     const { data: barbers } = await supabase
       .from('barbers')
       .select('*')
-      .order('name')
+      .order('display_order')
 
     if (locations && barbers) {
       // Sort locations so Petra (Lokal 1) comes first
