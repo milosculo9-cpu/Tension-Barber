@@ -152,25 +152,16 @@ export async function POST(request) {
                   <!-- Footer -->
                   <tr>
                     <td style="padding: 20px; text-align: center;">
-                      <p style="color: #666; margin: 0; font-size: 12px;">
+                      <p style="color: #666; margin: 0 0 15px; font-size: 12px;">
                         Vidimo se! 🤙
                       </p>
-                    </td>
-                  </tr>
-
-                  ${cancelUrl ? `
-                  <!-- Cancel Button -->
-                  <tr>
-                    <td style="padding: 0 20px 30px; text-align: center;">
-                      <p style="color: #444; margin: 0 0 15px; font-size: 11px;">
-                        Ako želite da otkažete termin:
-                      </p>
-                      <a href="${cancelUrl}" style="display: inline-block; background-color: #333; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 500;">
+                      ${cancelUrl ? `
+                      <a href="${cancelUrl}" style="color: #ef4444; font-size: 12px; text-decoration: none;">
                         Otkaži rezervaciju
                       </a>
+                      ` : ''}
                     </td>
                   </tr>
-                  ` : ''}
 
                 </table>
               </td>
