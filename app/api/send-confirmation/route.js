@@ -44,11 +44,11 @@ export async function POST(request) {
           <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #000000; padding: 20px;">
             <tr>
               <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #000000;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #000000; border-radius: 12px; overflow: hidden;">
                   
                   <!-- Header with Logo -->
                   <tr>
-                    <td style="padding: 30px 20px; text-align: center;">
+                    <td style="padding: 30px 20px; text-align: center; border-bottom: 1px solid #222;">
                       <p style="color: #888888; margin: 0 0 20px; font-size: 11px; text-transform: uppercase; letter-spacing: 3px;">
                         TENSION BARBER
                       </p>
@@ -56,73 +56,67 @@ export async function POST(request) {
                     </td>
                   </tr>
 
-                  <!-- Success Message with Checkmark -->
+                  <!-- Success Message -->
                   <tr>
-                    <td style="padding: 20px; text-align: center;">
-                      <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
-                        <tr>
-                          <td style="width: 50px; height: 50px; background-color: #22c55e; border-radius: 50%; text-align: center; vertical-align: middle;">
-                            <span style="color: white; font-size: 26px; line-height: 50px;">&#10003;</span>
-                          </td>
-                        </tr>
-                      </table>
-                      <p style="color: #22c55e; margin: 15px 0 0; font-size: 18px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">
-                        Rezervacija potvrđena
-                      </p>
+                    <td style="padding: 30px 20px; text-align: center;">
+                      <div style="width: 60px; height: 60px; background-color: #22c55e; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center;">
+                        <span style="color: white; font-size: 30px;">✓</span>
+                      </div>
+                      <h2 style="color: #22c55e; margin: 0; font-size: 20px;">Rezervacija potvrđena!</h2>
                     </td>
                   </tr>
 
                   <!-- Booking Details -->
                   <tr>
-                    <td style="padding: 20px;">
+                    <td style="padding: 0 20px 30px;">
                       <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #000000;">
                         
                         <tr>
                           <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Ime</p>
-                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${customerName}</p>
+                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Ime</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${customerName}</p>
                           </td>
                         </tr>
 
                         <tr>
                           <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Usluga</p>
-                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${serviceName}</p>
+                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Usluga</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${serviceName}</p>
                           </td>
                         </tr>
 
                         <tr>
                           <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Cena</p>
-                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${formattedPrice}</p>
+                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Cena</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${formattedPrice}</p>
                           </td>
                         </tr>
 
                         <tr>
                           <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Frizer</p>
-                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${barberName}</p>
+                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Frizer</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${barberName}</p>
                           </td>
                         </tr>
 
                         <tr>
                           <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Datum</p>
-                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${formattedDate}</p>
+                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Datum</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${formattedDate}</p>
                           </td>
                         </tr>
 
                         <tr>
                           <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Vreme</p>
-                            <p style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">${formattedTime}</p>
+                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Vreme</p>
+                            <p style="color: #fff; margin: 0; font-size: 24px; font-weight: bold;">${formattedTime}</p>
                           </td>
                         </tr>
 
                         <tr>
                           <td style="padding: 15px 0;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Lokacija</p>
-                            <p style="color: #ffffff; margin: 0; font-size: 14px;">${salonAddress}</p>
+                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Lokacija</p>
+                            <p style="color: #fff; margin: 0; font-size: 14px;">${salonAddress}</p>
                           </td>
                         </tr>
 
@@ -132,12 +126,12 @@ export async function POST(request) {
 
                   <!-- Footer -->
                   <tr>
-                    <td style="padding: 30px 20px; text-align: center; border-top: 1px solid #222;">
-                      <p style="color: #666; margin: 0; font-size: 13px;">
-                        Vidimo se!
+                    <td style="padding: 20px; text-align: center; border-top: 1px solid #222;">
+                      <p style="color: #666; margin: 0; font-size: 12px;">
+                        Vidimo se! 🤙
                       </p>
-                      <p style="color: #444; margin: 15px 0 0; font-size: 11px;">
-                        Za otkazivanje termina, molimo kontaktirajte nas.
+                      <p style="color: #444; margin: 10px 0 0; font-size: 11px;">
+                        Ako želite da otkažete termin, molimo vas da nas kontaktirate.
                       </p>
                     </td>
                   </tr>
