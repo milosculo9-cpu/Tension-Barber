@@ -411,7 +411,7 @@ export default function Home() {
           .eq('slot_time', nextSlotTime + ':00')
       }
 
-      const { data, error } = await supabase
+      const { data: appointmentData, error } = await supabase
         .from('appointments')
         .insert([
           {
@@ -430,6 +430,8 @@ export default function Home() {
             status: 'confirmed'
           }
         ])
+        .select('cancellation_token')
+        .single()
 
       if (error) throw error
 
@@ -462,7 +464,8 @@ export default function Home() {
             barberName: selectedBarber.name,
             appointmentDate: selectedDate.iso,
             appointmentTime: selectedTime,
-            salonAddress: selectedSalon.address
+            salonAddress: selectedSalon.address,
+            cancellationToken: appointmentData?.cancellation_token
           })
         })
       } catch (emailError) {
