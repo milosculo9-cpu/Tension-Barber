@@ -1,11 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -19,7 +13,8 @@ export async function POST(request) {
       barberName, 
       appointmentDate, 
       appointmentTime,
-      salonAddress 
+      salonAddress,
+      cancellationToken
     } = await request.json()
 
     // Format date for Serbian display
@@ -35,6 +30,143 @@ export async function POST(request) {
       ? `${servicePrice.toLocaleString('sr-RS')} RSD` 
       : 'Po dogovoru'
 
+    // Build cancel URL if token exists
+    const cancelUrl = cancellationToken 
+      ? `https://tension-barber.rs/api/cancel-reservation?token=${cancellationToken}`
+      : null
+
+    const { data, error } = await resend.emails.send({
+      from: 'Tension Barber <potvrda@tension-barber.rs>',
+      to: customerEmail,
+      subject: `Potvrda rezervacije - ${formattedDate}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #000000; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #000000; padding: 20px;">
+            <tr>
+              <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #000000;">
+                  
+                  <!-- Header - Big Title -->
+                  <tr>
+                    <td style="padding: 30px 20px 10px; text-align: center;">
+                      <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold; letter-spacing: 3px;">
+                        TENSION BARBER
+                      </h1>
+                      <p style="color: #888888; margin: 8px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 2px;">
+                        Muški frizerski salon
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Logo (big) with small checkmark below -->
+                  <tr>
+                    <td style="padding: 25px 20px; text-align: center;">
+                      <img src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/logo/logo.white.PNG" alt="Tension Barber" width="140" style="display: block; margin: 0 auto;" />
+                      <p style="color: #22c55e; margin: 12px 0 0; font-size: 24px; line-height: 1;">✓</p>
+                      <p style="color: #22c55e; margin: 8px 0 0; font-size: 16px; font-weight: 600;">
+                        Rezervacija potvrđena!
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Booking Details in gray rounded box -->
+                  <tr>
+                    <td style="padding: 10px 20px 20px;">
+                      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1a1a1a; border-radius: 12px; overflow: hidden;">
+                        
+                        <tr>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Ime</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${customerName}</p>
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Usluga</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${serviceName}</p>
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Cena</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${formattedPrice}</p>
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Frizer</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${barberName}</p>
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Datum</p>
+                            <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${formattedDate}</p>
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Vreme</p>
+                            <p style="color: #fff; margin: 0; font-size: 24px; font-weight: bold;">${formattedTime}</p>
+                          </td>
+                        </tr>
+
+                        <tr>
+                          <td style="padding: 15px 20px;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Lokacija</p>
+                            <p style="color: #fff; margin: 0; font-size: 14px;">${salonAddress}</p>
+                          </td>
+                        </tr>
+
+                      </table>
+                    </td>
+                  </tr>
+
+                  <!-- Footer -->
+                  <tr>
+                    <td style="padding: 20px; text-align: center;">
+                      <p style="color: #666; margin: 0 0 15px; font-size: 12px;">
+                        Vidimo se! 🤙
+                      </p>
+                      ${cancelUrl ? `
+                      <a href="${cancelUrl}" style="color: #ef4444; font-size: 12px; text-decoration: none;">
+                        Otkaži rezervaciju
+                      </a>
+                      ` : ''}
+                    </td>
+                  </tr>
+
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `
+    })
+
+    if (error) {
+      console.error('Resend error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, data })
+  } catch (error) {
+    console.error('API error:', error)
+    return NextResponse.json({ error: 'Failed to send email' }, { status: 500 })
+  }
+}
     // Get the cancellation token from the appointment we just created
     const { data: appointment } = await supabase
       .from('appointments')
