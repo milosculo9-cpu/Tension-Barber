@@ -44,78 +44,81 @@ export async function POST(request) {
           <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #000000; padding: 20px;">
             <tr>
               <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #000000; border-radius: 12px; overflow: hidden;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #000000;">
                   
-                  <!-- Header with Logo -->
+                  <!-- Header - Big Title -->
                   <tr>
-                    <td style="padding: 30px 20px; text-align: center; border-bottom: 1px solid #222;">
-                      <p style="color: #888888; margin: 0 0 20px; font-size: 11px; text-transform: uppercase; letter-spacing: 3px;">
+                    <td style="padding: 30px 20px 10px; text-align: center;">
+                      <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold; letter-spacing: 3px;">
                         TENSION BARBER
+                      </h1>
+                      <p style="color: #888888; margin: 8px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 2px;">
+                        Muški frizerski salon
                       </p>
-                      <img src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/assets/logo.white.PNG" alt="Tension Barber" width="120" style="display: block; margin: 0 auto;" />
                     </td>
                   </tr>
 
-                  <!-- Success Message -->
+                  <!-- Logo (big) with small checkmark below -->
                   <tr>
-                    <td style="padding: 30px 20px; text-align: center;">
-                      <div style="width: 60px; height: 60px; background-color: #22c55e; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center;">
-                        <span style="color: white; font-size: 30px;">✓</span>
-                      </div>
-                      <h2 style="color: #22c55e; margin: 0; font-size: 20px;">Rezervacija potvrđena!</h2>
+                    <td style="padding: 25px 20px; text-align: center;">
+                      <img src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/assets/logo.white.PNG" alt="Tension Barber" width="140" style="display: block; margin: 0 auto;" />
+                      <p style="color: #22c55e; margin: 12px 0 0; font-size: 24px; line-height: 1;">✓</p>
+                      <p style="color: #22c55e; margin: 8px 0 0; font-size: 16px; font-weight: 600;">
+                        Rezervacija potvrđena!
+                      </p>
                     </td>
                   </tr>
 
-                  <!-- Booking Details -->
+                  <!-- Booking Details in gray rounded box -->
                   <tr>
-                    <td style="padding: 0 20px 30px;">
-                      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #000000;">
+                    <td style="padding: 10px 20px 20px;">
+                      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1a1a1a; border-radius: 12px; overflow: hidden;">
                         
                         <tr>
-                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Ime</p>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Ime</p>
                             <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${customerName}</p>
                           </td>
                         </tr>
 
                         <tr>
-                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Usluga</p>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Usluga</p>
                             <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${serviceName}</p>
                           </td>
                         </tr>
 
                         <tr>
-                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Cena</p>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Cena</p>
                             <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${formattedPrice}</p>
                           </td>
                         </tr>
 
                         <tr>
-                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Frizer</p>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Frizer</p>
                             <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${barberName}</p>
                           </td>
                         </tr>
 
                         <tr>
-                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Datum</p>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Datum</p>
                             <p style="color: #fff; margin: 0; font-size: 16px; font-weight: bold;">${formattedDate}</p>
                           </td>
                         </tr>
 
                         <tr>
-                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Vreme</p>
+                          <td style="padding: 15px 20px; border-bottom: 1px solid #333;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Vreme</p>
                             <p style="color: #fff; margin: 0; font-size: 24px; font-weight: bold;">${formattedTime}</p>
                           </td>
                         </tr>
 
                         <tr>
-                          <td style="padding: 15px 0;">
-                            <p style="color: #666; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Lokacija</p>
+                          <td style="padding: 15px 20px;">
+                            <p style="color: #888; margin: 0 0 5px; font-size: 12px; text-transform: uppercase;">Lokacija</p>
                             <p style="color: #fff; margin: 0; font-size: 14px;">${salonAddress}</p>
                           </td>
                         </tr>
@@ -126,7 +129,7 @@ export async function POST(request) {
 
                   <!-- Footer -->
                   <tr>
-                    <td style="padding: 20px; text-align: center; border-top: 1px solid #222;">
+                    <td style="padding: 20px; text-align: center;">
                       <p style="color: #666; margin: 0; font-size: 12px;">
                         Vidimo se! 🤙
                       </p>
