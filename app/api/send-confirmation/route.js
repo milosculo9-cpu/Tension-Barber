@@ -1,5 +1,11 @@
+import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { NextResponse } from 'next/server'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -28,6 +34,22 @@ export async function POST(request) {
     const formattedPrice = servicePrice 
       ? `${servicePrice.toLocaleString('sr-RS')} RSD` 
       : 'Po dogovoru'
+
+    // Get the cancellation token from the appointment we just created
+    const { data: appointment } = await supabase
+      .from('appointments')
+      .select('cancellation_token')
+      .eq('customer_email', customerEmail)
+      .eq('appointment_date', appointmentDate)
+      .eq('appointment_time', appointmentTime + ':00')
+      .eq('status', 'confirmed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    const cancelUrl = appointment?.cancellation_token 
+      ? `https://tension-barber.rs/api/cancel-reservation?token=${appointment.cancellation_token}`
+      : null
 
     const { data, error } = await resend.emails.send({
       from: 'Tension Barber <potvrda@tension-barber.rs>',
@@ -133,11 +155,22 @@ export async function POST(request) {
                       <p style="color: #666; margin: 0; font-size: 12px;">
                         Vidimo se! 🤙
                       </p>
-                      <p style="color: #444; margin: 10px 0 0; font-size: 11px;">
-                        Ako želite da otkažete termin, molimo vas da nas kontaktirate.
-                      </p>
                     </td>
                   </tr>
+
+                  ${cancelUrl ? `
+                  <!-- Cancel Button -->
+                  <tr>
+                    <td style="padding: 0 20px 30px; text-align: center;">
+                      <p style="color: #444; margin: 0 0 15px; font-size: 11px;">
+                        Ako želite da otkažete termin:
+                      </p>
+                      <a href="${cancelUrl}" style="display: inline-block; background-color: #333; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 500;">
+                        Otkaži rezervaciju
+                      </a>
+                    </td>
+                  </tr>
+                  ` : ''}
 
                 </table>
               </td>
