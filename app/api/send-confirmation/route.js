@@ -61,7 +61,7 @@ export async function POST(request) {
                   <!-- Logo (big) with small checkmark below -->
                   <tr>
                     <td style="padding: 25px 20px; text-align: center;">
-                      <img src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/assets/logo.white.PNG" alt="Tension Barber" width="140" style="display: block; margin: 0 auto;" />
+                      <img src="https://tension-barber.rs/logo-white.png" alt="Tension Barber" width="140" style="display: block; margin: 0 auto;" />
                       <p style="color: #22c55e; margin: 12px 0 0; font-size: 24px; line-height: 1;">✓</p>
                       <p style="color: #22c55e; margin: 8px 0 0; font-size: 16px; font-weight: 600;">
                         Rezervacija potvrđena!
