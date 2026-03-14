@@ -122,6 +122,7 @@ export default function Home() {
       const { data } = await supabase
         .from('services')
         .select('*')
+        .eq('is_active', true)
         .order('display_order')
       if (data) setPriceList(data.map(s => ({ ...s, price: s.price ? parseFloat(s.price) : null })))
     }
