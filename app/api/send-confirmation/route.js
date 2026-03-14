@@ -16,112 +16,139 @@ export async function POST(request) {
       salonAddress 
     } = await request.json()
 
+    // Format date for Serbian display
     const dateObj = new Date(appointmentDate)
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
     const formattedDate = dateObj.toLocaleDateString('sr-RS', options)
+
+    // Format time (remove seconds)
     const formattedTime = appointmentTime.slice(0, 5)
-    const formattedPrice = servicePrice ? servicePrice.toLocaleString('sr-RS') + ' RSD' : 'Po dogovoru'
-    const logoUrl = 'https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/assets/logo.white.PNG'
+
+    // Format price
+    const formattedPrice = servicePrice 
+      ? `${servicePrice.toLocaleString('sr-RS')} RSD` 
+      : 'Po dogovoru'
 
     const { data, error } = await resend.emails.send({
       from: 'Tension Barber <potvrda@tension-barber.rs>',
       to: customerEmail,
-      subject: 'Potvrda rezervacije - ' + formattedDate,
-      html: `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background-color:#000000;font-family:Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#000000;padding:20px;">
-<tr>
-<td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:500px;background-color:#000000;">
+      subject: `Potvrda rezervacije - ${formattedDate}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #000000; font-family: Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #000000; padding: 20px;">
+            <tr>
+              <td align="center">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 500px; background-color: #000000;">
+                  
+                  <!-- Header with Logo -->
+                  <tr>
+                    <td style="padding: 30px 20px; text-align: center;">
+                      <p style="color: #888888; margin: 0 0 20px; font-size: 11px; text-transform: uppercase; letter-spacing: 3px;">
+                        TENSION BARBER
+                      </p>
+                      <img src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/assets/logo.white.PNG" alt="Tension Barber" width="120" style="display: block; margin: 0 auto;" />
+                    </td>
+                  </tr>
 
-<tr>
-<td style="padding:30px 20px;text-align:center;">
-<p style="color:#888888;margin:0 0 25px;font-size:11px;text-transform:uppercase;letter-spacing:3px;">TENSION BARBER</p>
-<img src="${logoUrl}" alt="Tension Barber" width="120" style="display:block;margin:0 auto;" />
-<table cellpadding="0" cellspacing="0" style="margin:20px auto 0;">
-<tr>
-<td style="background-color:#22c55e;border-radius:50%;width:40px;height:40px;text-align:center;vertical-align:middle;font-size:22px;color:white;">&#10003;</td>
-</tr>
-</table>
-<p style="color:#22c55e;margin:15px 0 0;font-size:18px;font-weight:600;text-transform:uppercase;letter-spacing:2px;">Rezervacija potvrdjena</p>
-</td>
-</tr>
+                  <!-- Success Message with Checkmark -->
+                  <tr>
+                    <td style="padding: 20px; text-align: center;">
+                      <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                        <tr>
+                          <td style="width: 50px; height: 50px; background-color: #22c55e; border-radius: 50%; text-align: center; vertical-align: middle;">
+                            <span style="color: white; font-size: 26px; line-height: 50px;">&#10003;</span>
+                          </td>
+                        </tr>
+                      </table>
+                      <p style="color: #22c55e; margin: 15px 0 0; font-size: 18px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">
+                        Rezervacija potvrđena
+                      </p>
+                    </td>
+                  </tr>
 
-<tr>
-<td style="padding:30px 20px;">
-<table width="100%" cellpadding="0" cellspacing="0">
+                  <!-- Booking Details -->
+                  <tr>
+                    <td style="padding: 20px;">
+                      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #000000;">
+                        
+                        <tr>
+                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
+                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Ime</p>
+                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${customerName}</p>
+                          </td>
+                        </tr>
 
-<tr>
-<td style="padding:15px 0;border-bottom:1px solid #222;">
-<p style="color:#666;margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Ime</p>
-<p style="color:#ffffff;margin:0;font-size:16px;">${customerName}</p>
-</td>
-</tr>
+                        <tr>
+                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
+                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Usluga</p>
+                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${serviceName}</p>
+                          </td>
+                        </tr>
 
-<tr>
-<td style="padding:15px 0;border-bottom:1px solid #222;">
-<p style="color:#666;margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Usluga</p>
-<p style="color:#ffffff;margin:0;font-size:16px;">${serviceName}</p>
-</td>
-</tr>
+                        <tr>
+                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
+                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Cena</p>
+                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${formattedPrice}</p>
+                          </td>
+                        </tr>
 
-<tr>
-<td style="padding:15px 0;border-bottom:1px solid #222;">
-<p style="color:#666;margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Cena</p>
-<p style="color:#ffffff;margin:0;font-size:16px;">${formattedPrice}</p>
-</td>
-</tr>
+                        <tr>
+                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
+                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Frizer</p>
+                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${barberName}</p>
+                          </td>
+                        </tr>
 
-<tr>
-<td style="padding:15px 0;border-bottom:1px solid #222;">
-<p style="color:#666;margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Frizer</p>
-<p style="color:#ffffff;margin:0;font-size:16px;">${barberName}</p>
-</td>
-</tr>
+                        <tr>
+                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
+                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Datum</p>
+                            <p style="color: #ffffff; margin: 0; font-size: 16px;">${formattedDate}</p>
+                          </td>
+                        </tr>
 
-<tr>
-<td style="padding:15px 0;border-bottom:1px solid #222;">
-<p style="color:#666;margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Datum</p>
-<p style="color:#ffffff;margin:0;font-size:16px;">${formattedDate}</p>
-</td>
-</tr>
+                        <tr>
+                          <td style="padding: 15px 0; border-bottom: 1px solid #222;">
+                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Vreme</p>
+                            <p style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">${formattedTime}</p>
+                          </td>
+                        </tr>
 
-<tr>
-<td style="padding:15px 0;border-bottom:1px solid #222;">
-<p style="color:#666;margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Vreme</p>
-<p style="color:#ffffff;margin:0;font-size:28px;font-weight:bold;">${formattedTime}</p>
-</td>
-</tr>
+                        <tr>
+                          <td style="padding: 15px 0;">
+                            <p style="color: #666; margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Lokacija</p>
+                            <p style="color: #ffffff; margin: 0; font-size: 14px;">${salonAddress}</p>
+                          </td>
+                        </tr>
 
-<tr>
-<td style="padding:15px 0;">
-<p style="color:#666;margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Lokacija</p>
-<p style="color:#ffffff;margin:0;font-size:14px;">${salonAddress}</p>
-</td>
-</tr>
+                      </table>
+                    </td>
+                  </tr>
 
-</table>
-</td>
-</tr>
+                  <!-- Footer -->
+                  <tr>
+                    <td style="padding: 30px 20px; text-align: center; border-top: 1px solid #222;">
+                      <p style="color: #666; margin: 0; font-size: 13px;">
+                        Vidimo se!
+                      </p>
+                      <p style="color: #444; margin: 15px 0 0; font-size: 11px;">
+                        Za otkazivanje termina, molimo kontaktirajte nas.
+                      </p>
+                    </td>
+                  </tr>
 
-<tr>
-<td style="padding:30px 20px;text-align:center;border-top:1px solid #222;">
-<p style="color:#666;margin:0;font-size:13px;">Vidimo se!</p>
-<p style="color:#444;margin:15px 0 0;font-size:11px;">Za otkazivanje termina, molimo kontaktirajte nas.</p>
-</td>
-</tr>
-
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>`
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `
     })
 
     if (error) {
