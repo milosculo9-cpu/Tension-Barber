@@ -522,13 +522,14 @@ export default function Dashboard() {
     const dateStr = formatDate(selectedDate);
     
     // Create appointment
-    await supabase
+    const { error } = await supabase
       .from('appointments')
       .insert({
         barber_id: barber.id,
         service_name: 'Ručna rezervacija',
         service_price: 0,
         customer_name: manualBookingForm.name,
+        customer_email: '',
         customer_phone: manualBookingForm.phone,
         appointment_date: dateStr,
         appointment_time: manualBookingSlot + ':00',
@@ -536,13 +537,24 @@ export default function Dashboard() {
         status: 'confirmed'
       });
     
-    // Mark slot as booked
+    if (error) {
+      console.error('Error creating appointment:', error);
+      alert('Greška pri kreiranju rezervacije: ' + error.message);
+      setSaving(false);
+      return;
+    }
+    
+    // Mark slot as booked (upsert in case slot doesn't exist)
     await supabase
       .from('barber_available_slots')
-      .update({ is_booked: true })
-      .eq('barber_id', barber.id)
-      .eq('slot_date', dateStr)
-      .eq('slot_time', manualBookingSlot + ':00');
+      .upsert({
+        barber_id: barber.id,
+        slot_date: dateStr,
+        slot_time: manualBookingSlot + ':00',
+        is_booked: true
+      }, {
+        onConflict: 'barber_id,slot_date,slot_time'
+      });
     
     // Reset form
     setShowManualBooking(false);
