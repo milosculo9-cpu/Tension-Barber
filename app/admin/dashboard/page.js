@@ -84,6 +84,16 @@ export default function Dashboard() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imgErrors, setImgErrors] = useState({});
   
+  // Appointment detail modal
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  
+  // Barber auth fields
+  const [newBarberEmail, setNewBarberEmail] = useState('');
+  const [newBarberPassword, setNewBarberPassword] = useState('');
+  const [editingBarberEmail, setEditingBarberEmail] = useState('');
+  const [editingBarberPassword, setEditingBarberPassword] = useState('');
+  const [savingAuth, setSavingAuth] = useState(false);
+  
   const fileInputRef = useRef(null);
   const router = useRouter();
   const supabase = createClientComponentClient();
@@ -159,8 +169,40 @@ export default function Dashboard() {
     if (barber) {
       loadSlotsForDate();
       loadAppointments();
+      loadSlotsLockedState();
     }
   }, [selectedDate, barber]);
+
+  // Load slots locked state from database
+  const loadSlotsLockedState = async () => {
+    const dateStr = formatDate(selectedDate);
+    const { data } = await supabase
+      .from('barber_day_locks')
+      .select('is_locked')
+      .eq('barber_id', barber.id)
+      .eq('lock_date', dateStr)
+      .single();
+    
+    setSlotsLocked(data?.is_locked || false);
+  };
+
+  // Toggle slots locked state and save to database
+  const toggleSlotsLocked = async () => {
+    const dateStr = formatDate(selectedDate);
+    const newLockedState = !slotsLocked;
+    
+    await supabase
+      .from('barber_day_locks')
+      .upsert({
+        barber_id: barber.id,
+        lock_date: dateStr,
+        is_locked: newLockedState
+      }, {
+        onConflict: 'barber_id,lock_date'
+      });
+    
+    setSlotsLocked(newLockedState);
+  };
 
   // Real-time subscription for new appointments and slot changes
   useEffect(() => {
@@ -349,6 +391,7 @@ export default function Dashboard() {
       .select('*', { count: 'exact', head: true })
       .eq('barber_id', barberId)
       .in('status', ['confirmed', 'needs_call'])
+      .eq('no_show', false)
       .gte('appointment_date', thirtyDaysAgo);
 
     const { count: todayCount } = await supabase
@@ -356,18 +399,34 @@ export default function Dashboard() {
       .select('*', { count: 'exact', head: true })
       .eq('barber_id', barberId)
       .eq('appointment_date', today)
-      .in('status', ['confirmed', 'needs_call']);
+      .in('status', ['confirmed', 'needs_call'])
+      .eq('no_show', false);
 
     const { data: revenueData } = await supabase
       .from('appointments')
       .select('service_price')
       .eq('barber_id', barberId)
       .in('status', ['confirmed', 'needs_call'])
+      .eq('no_show', false)
       .gte('appointment_date', thirtyDaysAgo);
 
     const revenue = revenueData?.reduce((sum, a) => sum + (a.service_price || 0), 0) || 0;
 
     setStats({ total: total || 0, today: todayCount || 0, revenue });
+  };
+
+  // Mark appointment as no-show
+  const markNoShow = async (appointmentId) => {
+    if (!confirm('Označiti da se klijent nije pojavio?')) return;
+    
+    await supabase
+      .from('appointments')
+      .update({ no_show: true })
+      .eq('id', appointmentId);
+    
+    setSelectedAppointment(null);
+    loadAppointments();
+    loadStats(barber.id);
   };
 
   const toggleSlot = async (time) => {
@@ -577,20 +636,78 @@ export default function Dashboard() {
   };
 
   const addBarber = async () => {
-    if (!newBarberName || !newBarberLocation) return;
+    if (!newBarberName || !newBarberLocation || !newBarberEmail || !newBarberPassword) return;
     
-    await supabase
-      .from('barbers')
-      .insert({
-        name: newBarberName,
-        location_id: newBarberLocation,
-        is_admin: false
+    setSavingAuth(true);
+    
+    try {
+      const response = await fetch('/api/manage-barber-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          name: newBarberName,
+          locationId: newBarberLocation,
+          email: newBarberEmail,
+          password: newBarberPassword
+        })
       });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        alert(result.error || 'Greška pri kreiranju berbera');
+        setSavingAuth(false);
+        return;
+      }
+      
+      setShowAddBarber(false);
+      setNewBarberName('');
+      setNewBarberLocation('');
+      setNewBarberEmail('');
+      setNewBarberPassword('');
+      loadAllBarbers();
+    } catch (error) {
+      alert('Greška pri kreiranju berbera');
+    }
     
-    setShowAddBarber(false);
-    setNewBarberName('');
-    setNewBarberLocation('');
-    loadAllBarbers();
+    setSavingAuth(false);
+  };
+
+  // Update barber login credentials
+  const updateBarberAuth = async () => {
+    if (!editingBarber || (!editingBarberEmail && !editingBarberPassword)) return;
+    
+    setSavingAuth(true);
+    
+    try {
+      const response = await fetch('/api/manage-barber-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          barberId: editingBarber.id,
+          email: editingBarberEmail || undefined,
+          password: editingBarberPassword || undefined
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        alert(result.error || 'Greška pri ažuriranju');
+        setSavingAuth(false);
+        return;
+      }
+      
+      alert('Login podaci ažurirani!');
+      setEditingBarberEmail('');
+      setEditingBarberPassword('');
+    } catch (error) {
+      alert('Greška pri ažuriranju');
+    }
+    
+    setSavingAuth(false);
   };
 
   const deleteBarber = async (barberId) => {
@@ -725,7 +842,7 @@ export default function Dashboard() {
                   return (
                     <button
                       key={i}
-                      onClick={() => { setSelectedDate(day); setSlotsLocked(false); }}
+                      onClick={() => setSelectedDate(day)}
                       className={`flex-shrink-0 w-14 py-2 rounded-lg text-center transition-all
                         ${isSelected ? 'bg-white text-black' : 'bg-white/5 text-white'}
                         ${isToday && !isSelected ? 'ring-1 ring-white/30' : ''}`}
@@ -781,10 +898,41 @@ export default function Dashboard() {
                 {timeSlots.map(time => {
                   const isAvailable = availableSlots.includes(time);
                   const isBooked = bookedSlots.includes(time);
+                  
+                  // Find appointment for this slot
+                  const slotAppointment = appointments.find(a => 
+                    a.appointment_date === formatDate(selectedDate) && 
+                    a.appointment_time?.slice(0, 5) === time &&
+                    a.status !== 'cancelled'
+                  );
+                  
+                  // Check if appointment is past (ended)
+                  const isPast = slotAppointment && (() => {
+                    const aptDate = new Date(slotAppointment.appointment_date);
+                    const [hours, minutes] = time.split(':').map(Number);
+                    aptDate.setHours(hours, minutes, 0, 0);
+                    const endTime = new Date(aptDate.getTime() + (slotAppointment.duration_minutes || 30) * 60 * 1000);
+                    return new Date() > endTime;
+                  })();
+                  
+                  const isNoShow = slotAppointment?.no_show;
+                  
+                  // Determine background color
+                  let bgColor = 'bg-white/5 text-white/40'; // default - not available
+                  if (isAvailable && !isBooked) bgColor = 'bg-white text-black'; // available
+                  if (isBooked && !isPast && !isNoShow) bgColor = 'bg-green-600 text-white'; // booked
+                  if (isBooked && isPast && !isNoShow) bgColor = 'bg-orange-500 text-white'; // past
+                  if (isNoShow) bgColor = 'bg-red-600 text-white'; // no-show
+                  
                   return (
                     <button
                       key={time}
                       onClick={() => {
+                        if (isBooked && slotsLocked && slotAppointment) {
+                          // Open appointment details modal
+                          setSelectedAppointment(slotAppointment);
+                          return;
+                        }
                         if (isBooked) return; // Can't toggle booked slots
                         if (slotsLocked && isAvailable) {
                           // Open manual booking
@@ -796,11 +944,10 @@ export default function Dashboard() {
                       }}
                       disabled={saving || (slotsLocked && !isAvailable && !isBooked)}
                       className={`py-3 rounded text-sm font-medium transition-all
-                        ${isBooked ? 'bg-green-600 text-white' : ''}
-                        ${isAvailable && !isBooked ? 'bg-white text-black' : ''}
-                        ${!isAvailable && !isBooked ? 'bg-white/5 text-white/40' : ''}
+                        ${bgColor}
                         ${saving ? 'opacity-50' : ''}
-                        ${isBooked ? 'cursor-default' : ''}`}
+                        ${isBooked && !slotsLocked ? 'cursor-default' : ''}
+                        ${isBooked && slotsLocked ? 'cursor-pointer hover:opacity-80' : ''}`}
                     >
                       {time}
                     </button>
@@ -808,18 +955,20 @@ export default function Dashboard() {
                 })}
               </div>
               
-              <div className="flex gap-4 mt-3 justify-center text-xs">
+              <div className="flex gap-3 mt-3 justify-center text-xs flex-wrap">
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-white rounded"></span> Slobodan</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-600 rounded"></span> Zakazan</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-500 rounded"></span> Prošao</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-600 rounded"></span> Nije došao</span>
               </div>
               
               {slotsLocked && (
-                <p className="text-green-400 text-xs mt-3 text-center">✓ Termini su zakljucani - klikni na slobodan termin za rucno zakazivanje</p>
+                <p className="text-green-400 text-xs mt-3 text-center">✓ Termini su zakljucani - klikni na termin za detalje ili na slobodan za rucno zakazivanje</p>
               )}
             </section>
 
             <button
-              onClick={() => setSlotsLocked(!slotsLocked)}
+              onClick={toggleSlotsLocked}
               className={`w-full py-4 rounded-lg font-medium transition-all ${
                 slotsLocked 
                   ? 'bg-white/10 text-white border border-white/20' 
@@ -1081,12 +1230,32 @@ export default function Dashboard() {
                           ))}
                         </select>
                       </div>
+                      <div>
+                        <label className="block text-white/40 text-xs mb-2">EMAIL ZA LOGIN</label>
+                        <input
+                          type="email"
+                          value={newBarberEmail}
+                          onChange={(e) => setNewBarberEmail(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                          placeholder="email@primer.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-white/40 text-xs mb-2">LOZINKA ZA LOGIN</label>
+                        <input
+                          type="password"
+                          value={newBarberPassword}
+                          onChange={(e) => setNewBarberPassword(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                          placeholder="Minimum 6 karaktera"
+                        />
+                      </div>
                       <button
                         onClick={addBarber}
-                        disabled={!newBarberName || !newBarberLocation}
+                        disabled={!newBarberName || !newBarberLocation || !newBarberEmail || !newBarberPassword || savingAuth}
                         className="w-full bg-white text-black py-3 rounded-lg font-medium disabled:opacity-50"
                       >
-                        SACUVAJ
+                        {savingAuth ? 'KREIRANJE...' : 'SACUVAJ'}
                       </button>
                     </div>
                   </div>
@@ -1138,6 +1307,40 @@ export default function Dashboard() {
                     <div className="mb-6">
                       <label className="block text-white/40 text-xs mb-2">LOKACIJA</label>
                       <p className="text-white/50 bg-white/5 rounded-lg px-4 py-3">{editingBarber.locations?.name}</p>
+                    </div>
+
+                    {/* Login credentials section */}
+                    <div className="mb-6 p-4 bg-white/5 rounded-lg">
+                      <h3 className="text-white/40 text-xs tracking-wider mb-4">LOGIN PODACI</h3>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-white/40 text-xs mb-1">NOVI EMAIL</label>
+                          <input
+                            type="email"
+                            value={editingBarberEmail}
+                            onChange={(e) => setEditingBarberEmail(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm"
+                            placeholder="Ostavi prazno ako ne menjaš"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-white/40 text-xs mb-1">NOVA LOZINKA</label>
+                          <input
+                            type="password"
+                            value={editingBarberPassword}
+                            onChange={(e) => setEditingBarberPassword(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm"
+                            placeholder="Ostavi prazno ako ne menjaš"
+                          />
+                        </div>
+                        <button
+                          onClick={updateBarberAuth}
+                          disabled={(!editingBarberEmail && !editingBarberPassword) || savingAuth}
+                          className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                        >
+                          {savingAuth ? 'ČUVANJE...' : 'AŽURIRAJ LOGIN'}
+                        </button>
+                      </div>
                     </div>
 
                     {!editingBarber.is_admin && (
@@ -1218,25 +1421,33 @@ export default function Dashboard() {
                     const [hours, minutes] = (apt.appointment_time || '00:00').split(':').map(Number);
                     aptDate.setHours(hours, minutes, 0, 0);
                     const isPast = new Date() > new Date(aptDate.getTime() + 30 * 60 * 1000);
+                    const isNoShow = apt.no_show;
                     
                     return (
                       <div 
                         key={apt.id} 
-                        className={`rounded-lg p-3 ${isPast ? 'bg-white/5 opacity-60' : 'bg-white/10'}`}
+                        className={`rounded-lg p-3 ${
+                          isNoShow ? 'bg-red-500/20 border border-red-500/30' :
+                          isPast ? 'bg-white/5 opacity-60' : 'bg-white/10'
+                        }`}
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <p className="font-medium text-sm">{apt.customer_name}</p>
+                            <p className={`font-medium text-sm ${isNoShow ? 'text-red-400' : ''}`}>{apt.customer_name}</p>
                             <p className="text-white/50 text-xs">{apt.service_name}</p>
                             <p className="text-white/30 text-xs mt-1">
                               {new Date(apt.appointment_date).toLocaleDateString('sr-RS')} • {apt.appointment_time?.slice(0, 5)}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="font-medium text-sm">{apt.service_price?.toLocaleString()} RSD</p>
-                            {isPast && (
+                            <p className={`font-medium text-sm ${isNoShow ? 'line-through text-red-400/50' : ''}`}>
+                              {apt.service_price?.toLocaleString()} RSD
+                            </p>
+                            {isNoShow ? (
+                              <span className="text-red-400 text-xs">❌ Nije došao</span>
+                            ) : isPast ? (
                               <span className="text-green-400 text-xs">✓ Završeno</span>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -1248,8 +1459,13 @@ export default function Dashboard() {
             <div className="p-4 border-t border-zinc-700 text-center">
               <p className="text-white/30 text-sm">
                 Ukupna zarada: <span className="text-white font-medium">
-                  {pastAppointments.reduce((sum, a) => sum + (a.service_price || 0), 0).toLocaleString()} RSD
+                  {pastAppointments.filter(a => !a.no_show).reduce((sum, a) => sum + (a.service_price || 0), 0).toLocaleString()} RSD
                 </span>
+                {pastAppointments.some(a => a.no_show) && (
+                  <span className="text-red-400 ml-2">
+                    ({pastAppointments.filter(a => a.no_show).length} nije došao)
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -1312,6 +1528,101 @@ export default function Dashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Appointment Detail Modal */}
+      {selectedAppointment && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedAppointment(null)}
+        >
+          <div 
+            className="bg-zinc-900 rounded-xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
+              <h3 className="font-medium text-lg">Detalji rezervacije</h3>
+              <button 
+                onClick={() => setSelectedAppointment(null)}
+                className="text-white/50 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <p className="text-white/40 text-xs">KLIJENT</p>
+                <p className="text-lg font-medium">{selectedAppointment.customer_name}</p>
+              </div>
+              
+              {selectedAppointment.customer_phone && (
+                <div>
+                  <p className="text-white/40 text-xs">TELEFON</p>
+                  <a href={`tel:${selectedAppointment.customer_phone}`} className="text-lg text-blue-400">
+                    {selectedAppointment.customer_phone}
+                  </a>
+                </div>
+              )}
+              
+              {selectedAppointment.customer_email && (
+                <div>
+                  <p className="text-white/40 text-xs">EMAIL</p>
+                  <p className="text-white/70">{selectedAppointment.customer_email}</p>
+                </div>
+              )}
+              
+              <div>
+                <p className="text-white/40 text-xs">USLUGA</p>
+                <p className="text-lg">{selectedAppointment.service_name}</p>
+              </div>
+              
+              <div className="flex gap-4">
+                <div>
+                  <p className="text-white/40 text-xs">DATUM</p>
+                  <p className="text-lg">{new Date(selectedAppointment.appointment_date).toLocaleDateString('sr-RS')}</p>
+                </div>
+                <div>
+                  <p className="text-white/40 text-xs">VREME</p>
+                  <p className="text-lg">{selectedAppointment.appointment_time?.slice(0, 5)}</p>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-white/40 text-xs">CENA</p>
+                <p className="text-lg font-medium">{selectedAppointment.service_price?.toLocaleString() || 0} RSD</p>
+              </div>
+              
+              {selectedAppointment.no_show && (
+                <div className="bg-red-500/20 text-red-400 p-3 rounded-lg text-center font-medium">
+                  ❌ Klijent se nije pojavio
+                </div>
+              )}
+              
+              {/* Show No-Show button only for past or current appointments that aren't already marked */}
+              {!selectedAppointment.no_show && (() => {
+                const aptDate = new Date(selectedAppointment.appointment_date);
+                const [hours, minutes] = (selectedAppointment.appointment_time || '00:00').split(':').map(Number);
+                aptDate.setHours(hours, minutes, 0, 0);
+                return new Date() >= aptDate;
+              })() && (
+                <button
+                  onClick={() => markNoShow(selectedAppointment.id)}
+                  className="w-full py-3 rounded-lg bg-red-500/20 text-red-400 font-medium hover:bg-red-500/30 transition"
+                >
+                  NIJE SE POJAVIO
+                </button>
+              )}
+            </div>
+            <div className="p-4 border-t border-zinc-700">
+              <button
+                onClick={() => setSelectedAppointment(null)}
+                className="w-full py-3 rounded-lg bg-white/10 text-white"
+              >
+                Zatvori
+              </button>
+            </div>
           </div>
         </div>
       )}
