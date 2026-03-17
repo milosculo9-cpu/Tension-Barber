@@ -519,6 +519,7 @@ export default function Dashboard() {
         customer_phone: manualBookingForm.phone,
         appointment_date: dateStr,
         appointment_time: manualBookingSlot + ':00',
+        duration_minutes: slotDuration,
         status: 'confirmed'
       });
     
@@ -535,9 +536,10 @@ export default function Dashboard() {
     setManualBookingSlot(null);
     setManualBookingForm({ name: '', phone: '' });
     
-    loadSlotsForDate();
-    loadAppointments();
-    loadStats(barber.id);
+    // Reload data
+    await loadSlotsForDate();
+    await loadAppointments();
+    await loadStats(barber.id);
     setSaving(false);
   };
 
@@ -927,10 +929,27 @@ export default function Dashboard() {
                   return (
                     <button
                       key={time}
-                      onClick={() => {
-                        if (isBooked && slotsLocked && slotAppointment) {
-                          // Open appointment details modal
-                          setSelectedAppointment(slotAppointment);
+                      onClick={async () => {
+                        if (isBooked && slotsLocked) {
+                          // Try to find appointment in state first
+                          let apt = slotAppointment;
+                          
+                          // If not found in state, fetch from database
+                          if (!apt) {
+                            const { data } = await supabase
+                              .from('appointments')
+                              .select('*')
+                              .eq('barber_id', barber.id)
+                              .eq('appointment_date', formatDate(selectedDate))
+                              .eq('appointment_time', time + ':00')
+                              .neq('status', 'cancelled')
+                              .single();
+                            apt = data;
+                          }
+                          
+                          if (apt) {
+                            setSelectedAppointment(apt);
+                          }
                           return;
                         }
                         if (isBooked) return; // Can't toggle booked slots
