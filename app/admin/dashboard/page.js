@@ -1041,11 +1041,10 @@ export default function Dashboard() {
                             setShowManualBooking(true);
                           }
                         } else {
-                          // Edit mode
+                          // Edit mode - toggle availability
                           if (isAvailable) {
-                            // WHITE slot clicked -> open booking form
-                            setManualBookingSlot(time);
-                            setShowManualBooking(true);
+                            // WHITE slot clicked -> make it unavailable (gray)
+                            toggleSlot(time);
                           } else {
                             // GRAY slot clicked -> make it available (white)
                             toggleSlot(time);
@@ -1075,7 +1074,7 @@ export default function Dashboard() {
               <p className="text-white/40 text-xs mt-3 text-center">
                 {slotsLocked 
                   ? '✓ Termini zaključani • Klikni na slobodan za zakazivanje • Klikni na zakazan za detalje'
-                  : 'Klikni na siv da otvoriš termin • Klikni na beo da zakažeš • Klikni na zelen za detalje'
+                  : 'Klikni na siv/beo da menjaš dostupnost • Zaključaj termine pa klikni na beo za zakazivanje'
                 }
               </p>
             </section>
