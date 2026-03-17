@@ -94,6 +94,9 @@ export default function Dashboard() {
   const [editingBarberPassword, setEditingBarberPassword] = useState('');
   const [savingAuth, setSavingAuth] = useState(false);
   
+  // Blocked slot without appointment
+  const [blockedSlotTime, setBlockedSlotTime] = useState(null);
+  
   const fileInputRef = useRef(null);
   const router = useRouter();
   const supabase = createClientComponentClient();
@@ -432,10 +435,11 @@ export default function Dashboard() {
   const toggleSlot = async (time) => {
     if (slotsLocked) return;
     
-    setSaving(true);
     const dateStr = formatDate(selectedDate);
     
     if (availableSlots.includes(time)) {
+      // Slot is available, remove it (make unavailable)
+      setSaving(true);
       await supabase
         .from('barber_available_slots')
         .delete()
@@ -444,7 +448,10 @@ export default function Dashboard() {
         .eq('slot_time', time + ':00');
       
       setAvailableSlots(prev => prev.filter(s => s !== time));
+      setSaving(false);
     } else {
+      // Slot is not available, make it available (white)
+      setSaving(true);
       await supabase
         .from('barber_available_slots')
         .insert({
@@ -455,8 +462,14 @@ export default function Dashboard() {
         });
       
       setAvailableSlots(prev => [...prev, time]);
+      setSaving(false);
     }
-    setSaving(false);
+  };
+
+  // Book a slot directly (mark as booked with appointment)
+  const bookSlotDirectly = (time) => {
+    setManualBookingSlot(time);
+    setShowManualBooking(true);
   };
 
   const selectAllSlots = async () => {
@@ -920,21 +933,20 @@ export default function Dashboard() {
                   const isNoShow = slotAppointment?.no_show;
                   
                   // Determine background color
-                  let bgColor = 'bg-white/5 text-white/40'; // default - not available
-                  if (isAvailable && !isBooked) bgColor = 'bg-white text-black'; // available
-                  if (isBooked && !isPast && !isNoShow) bgColor = 'bg-green-600 text-white'; // booked
-                  if (isBooked && isPast && !isNoShow) bgColor = 'bg-orange-500 text-white'; // past
-                  if (isNoShow) bgColor = 'bg-red-600 text-white'; // no-show
+                  let bgColor = 'bg-white/5 text-white/40'; // default - not available (gray)
+                  if (isAvailable && !isBooked) bgColor = 'bg-white text-black'; // available (white)
+                  if (isBooked && !isPast && !isNoShow) bgColor = 'bg-green-600 text-white'; // booked (green)
+                  if (isBooked && isPast && !isNoShow) bgColor = 'bg-orange-500 text-white'; // past (orange)
+                  if (isNoShow) bgColor = 'bg-red-600 text-white'; // no-show (red)
                   
                   return (
                     <button
                       key={time}
                       onClick={async () => {
-                        if (isBooked && slotsLocked) {
-                          // Try to find appointment in state first
+                        // BOOKED SLOT - show details or blocked slot options
+                        if (isBooked) {
                           let apt = slotAppointment;
                           
-                          // If not found in state, fetch from database
                           if (!apt) {
                             const { data } = await supabase
                               .from('appointments')
@@ -949,24 +961,36 @@ export default function Dashboard() {
                           
                           if (apt) {
                             setSelectedAppointment(apt);
+                          } else {
+                            setBlockedSlotTime(time);
                           }
                           return;
                         }
-                        if (isBooked) return; // Can't toggle booked slots
-                        if (slotsLocked && isAvailable) {
-                          // Open manual booking
-                          setManualBookingSlot(time);
-                          setShowManualBooking(true);
+                        
+                        // NOT BOOKED SLOTS
+                        if (slotsLocked) {
+                          // Locked mode: click on available slot opens booking form
+                          if (isAvailable) {
+                            setManualBookingSlot(time);
+                            setShowManualBooking(true);
+                          }
                         } else {
-                          toggleSlot(time);
+                          // Edit mode
+                          if (isAvailable) {
+                            // WHITE slot clicked -> open booking form
+                            setManualBookingSlot(time);
+                            setShowManualBooking(true);
+                          } else {
+                            // GRAY slot clicked -> make it available (white)
+                            toggleSlot(time);
+                          }
                         }
                       }}
                       disabled={saving || (slotsLocked && !isAvailable && !isBooked)}
                       className={`py-3 rounded text-sm font-medium transition-all
                         ${bgColor}
                         ${saving ? 'opacity-50' : ''}
-                        ${isBooked && !slotsLocked ? 'cursor-default' : ''}
-                        ${isBooked && slotsLocked ? 'cursor-pointer hover:opacity-80' : ''}`}
+                        ${isBooked ? 'cursor-pointer' : ''}`}
                     >
                       {time}
                     </button>
@@ -975,15 +999,19 @@ export default function Dashboard() {
               </div>
               
               <div className="flex gap-3 mt-3 justify-center text-xs flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-white/10 rounded border border-white/20"></span> Nedostupan</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-white rounded"></span> Slobodan</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-600 rounded"></span> Zakazan</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-500 rounded"></span> Prošao</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-600 rounded"></span> Nije došao</span>
               </div>
               
-              {slotsLocked && (
-                <p className="text-green-400 text-xs mt-3 text-center">✓ Termini su zakljucani - klikni na termin za detalje ili na slobodan za rucno zakazivanje</p>
-              )}
+              <p className="text-white/40 text-xs mt-3 text-center">
+                {slotsLocked 
+                  ? '✓ Termini zaključani • Klikni na slobodan za zakazivanje • Klikni na zakazan za detalje'
+                  : 'Klikni na siv da otvoriš termin • Klikni na beo da zakažeš • Klikni na zelen za detalje'
+                }
+              </p>
             </section>
 
             <button
@@ -1551,7 +1579,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Appointment Detail Modal */}
+            {/* Appointment Detail Modal */}
       {selectedAppointment && (
         <div 
           className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
@@ -1638,6 +1666,64 @@ export default function Dashboard() {
               <button
                 onClick={() => setSelectedAppointment(null)}
                 className="w-full py-3 rounded-lg bg-white/10 text-white"
+              >
+                Zatvori
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Blocked Slot Modal - for slots marked as booked but without appointment data */}
+      {blockedSlotTime && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          onClick={() => setBlockedSlotTime(null)}
+        >
+          <div 
+            className="bg-zinc-900 rounded-xl w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-zinc-700">
+              <h3 className="font-medium text-lg text-center">Blokiran termin</h3>
+              <p className="text-white/50 text-sm text-center mt-1">
+                {formatDate(selectedDate)} u {blockedSlotTime}
+              </p>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-white/60 text-sm text-center">
+                Ovaj termin je označen kao zauzet, ali nema podatke o rezervaciji.
+              </p>
+              <button
+                onClick={() => {
+                  setManualBookingSlot(blockedSlotTime);
+                  setShowManualBooking(true);
+                  setBlockedSlotTime(null);
+                }}
+                className="w-full py-3 rounded-lg bg-green-600 text-white font-medium"
+              >
+                DODAJ REZERVACIJU
+              </button>
+              <button
+                onClick={async () => {
+                  // Unblock the slot
+                  await supabase
+                    .from('barber_available_slots')
+                    .update({ is_booked: false })
+                    .eq('barber_id', barber.id)
+                    .eq('slot_date', formatDate(selectedDate))
+                    .eq('slot_time', blockedSlotTime + ':00');
+                  
+                  setBlockedSlotTime(null);
+                  loadSlotsForDate();
+                }}
+                className="w-full py-3 rounded-lg bg-white/10 text-white font-medium"
+              >
+                OSLOBODI TERMIN
+              </button>
+              <button
+                onClick={() => setBlockedSlotTime(null)}
+                className="w-full py-2 text-white/50 text-sm"
               >
                 Zatvori
               </button>
