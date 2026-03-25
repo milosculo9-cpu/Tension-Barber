@@ -91,6 +91,8 @@ export default function Dashboard() {
   // Barber auth fields
   const [newBarberEmail, setNewBarberEmail] = useState('');
   const [newBarberPassword, setNewBarberPassword] = useState('');
+  const [newBarberImage, setNewBarberImage] = useState(null);
+  const [newBarberImagePreview, setNewBarberImagePreview] = useState(null);
   const [editingBarberEmail, setEditingBarberEmail] = useState('');
   const [editingBarberPassword, setEditingBarberPassword] = useState('');
   const [savingAuth, setSavingAuth] = useState(false);
@@ -99,6 +101,7 @@ export default function Dashboard() {
   const [blockedSlotTime, setBlockedSlotTime] = useState(null);
   
   const fileInputRef = useRef(null);
+  const newBarberFileInputRef = useRef(null);
   const router = useRouter();
   const supabase = createClientComponentClient();
   const days = getNext14Days();
@@ -742,11 +745,37 @@ export default function Dashboard() {
         return;
       }
       
+      // If image was selected, upload it
+      if (newBarberImage && result.barber?.id) {
+        const fileExt = newBarberImage.name.split('.').pop().toLowerCase();
+        const fileName = `${newBarberName.toLowerCase()
+          .replace(/đ/g, 'dj')
+          .replace(/č/g, 'c')
+          .replace(/ć/g, 'c')
+          .replace(/š/g, 's')
+          .replace(/ž/g, 'z')
+          .replace(/[^a-z]/g, '')}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('barbers')
+          .upload(fileName, newBarberImage, { upsert: true });
+        
+        if (!uploadError) {
+          const imageUrl = `${STORAGE_URL}/barbers/${fileName}`;
+          await supabase
+            .from('barbers')
+            .update({ image_url: imageUrl })
+            .eq('id', result.barber.id);
+        }
+      }
+      
       setShowAddBarber(false);
       setNewBarberName('');
       setNewBarberLocation('');
       setNewBarberEmail('');
       setNewBarberPassword('');
+      setNewBarberImage(null);
+      setNewBarberImagePreview(null);
       loadAllBarbers();
     } catch (error) {
       alert('Greška pri kreiranju berbera');
@@ -1319,6 +1348,41 @@ export default function Dashboard() {
                   <div>
                     <h2 className="text-white/40 text-xs tracking-wider mb-4">DODAJ BERBERA</h2>
                     <div className="space-y-4">
+                      {/* Image upload for new barber */}
+                      <div className="flex flex-col items-center mb-4">
+                        {newBarberImagePreview ? (
+                          <img 
+                            src={newBarberImagePreview} 
+                            alt="Preview" 
+                            className="w-32 h-32 rounded-full object-cover mb-4 border-2 border-white/20"
+                          />
+                        ) : (
+                          <div className="w-32 h-32 rounded-full bg-white/10 flex items-center justify-center text-white/30 text-5xl mb-4 border-2 border-white/20">
+                            👤
+                          </div>
+                        )}
+                        <input
+                          ref={newBarberFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setNewBarberImage(file);
+                              setNewBarberImagePreview(URL.createObjectURL(file));
+                            }
+                          }}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => newBarberFileInputRef.current?.click()}
+                          className="text-sm text-white/50 border border-white/20 px-4 py-2 rounded"
+                        >
+                          {newBarberImagePreview ? 'PROMENI SLIKU' : 'DODAJ SLIKU'}
+                        </button>
+                      </div>
+                      
                       <div>
                         <label className="block text-white/40 text-xs mb-2">IME</label>
                         <input
