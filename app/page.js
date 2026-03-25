@@ -31,41 +31,13 @@ const MOBILE_HERO_IMAGES = [
   'mobile/6.jpeg',
 ]
 
-const SERVICES = [
-  { id: 1, name: 'Šišanje "Fejd"', price: 1200 },
-  { id: 2, name: 'Šišanje duža kosa', price: 1500 },
-  { id: 3, name: 'Šišanje zatvorski', price: 800 },
-  { id: 4, name: 'Brijanje glave britvom', price: 800 },
-  { id: 5, name: 'Trimovanje i konture brade', price: 600 },
-  { id: 6, name: 'Konture brade', price: 350 },
-  { id: 7, name: 'Oblikovanje obrva koncem', price: 400 },
-  { id: 8, name: 'Oblikovanje obrva britvom', price: 300 },
-  { id: 9, name: 'Pranje kose', price: 350 },
-  { id: 10, name: 'Vosak uši', price: 300 },
-  { id: 11, name: 'Vosak nos', price: 300 },
-  { id: 12, name: 'Farbanje kose', price: null },
-  { id: 13, name: 'Farbanje brade', price: null },
-  { id: 14, name: 'Tension Full Paket', price: 3000 },
-  { id: 15, name: '"Vanredno" šišanje', price: 1500 },
-  { id: 16, name: 'Tension All Inclusive', price: 3500 },
-]
-
-// Additional services that can be added to haircut
-const ADDON_SERVICES = [
-  { id: 101, name: 'Oblikovanje obrva britvom', price: 300 },
-  { id: 102, name: 'Vosak nos', price: 300 },
-  { id: 103, name: 'Vosak uši', price: 300 },
-  { id: 104, name: 'Pranje kose', price: 350 },
-  { id: 105, name: 'Konture brade', price: 350 },
-  { id: 106, name: 'Oblikovanje obrva koncem', price: 400 },
-  { id: 107, name: 'Trimovanje i konture brade', price: 600 },
-]
-
-// Services that trigger addon selection (contain "šišanje" or are haircut packages)
-const SISANJE_SERVICE_IDS = [1, 2, 3, 15] // Fejd, Duža kosa, Zatvorski, Vanredno
-
-// Services that REQUIRE double slot (Tension packages)
-const DOUBLE_SLOT_SERVICE_IDS = [14, 16] // Tension Full Paket, Tension All Inclusive
+// Helper function to get price based on location
+const getPriceForLocation = (service, isLocation2) => {
+  if (isLocation2) {
+    return service.price_location2;
+  }
+  return service.price;
+}
 
 // Generate dates for next 2 weeks
 function generateDates() {
@@ -128,7 +100,11 @@ export default function Home() {
         .from('services')
         .select('*')
         .order('display_order')
-      if (data) setPriceList(data.map(s => ({ ...s, price: s.price ? parseFloat(s.price) : null })))
+      if (data) setPriceList(data.map(s => ({ 
+        ...s, 
+        price: s.price ? parseFloat(s.price) : null,
+        price_location2: s.price_location2 ? parseFloat(s.price_location2) : null
+      })))
     }
     loadPriceList()
 
@@ -377,15 +353,20 @@ export default function Home() {
     setIsSubmitting(true)
 
     // Calculate total service name and price including addons
+    const isLoc2 = selectedSalon?.name === 'Tension Barber II'
+    const servicePrice = getPriceForLocation(selectedService, isLoc2) || 0
     const addonNames = selectedAddons.map(a => a.name).join(', ')
-    const addonTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0)
+    const addonTotal = selectedAddons.reduce((sum, a) => sum + (a.price || 0), 0)
     const fullServiceName = addonNames 
       ? `${selectedService.name} + ${addonNames}`
       : selectedService.name
-    const fullServicePrice = (selectedService.price || 0) + addonTotal
+    const fullServicePrice = servicePrice + addonTotal
     
     // Only Tension Full Paket and Tension All Inclusive need double slot
-    const needsDoubleSlot = DOUBLE_SLOT_SERVICE_IDS.includes(selectedService.id)
+    const doubleSlotServices = ['Tension Full Paket', 'Tension All Inclusive']
+    const needsDoubleSlot = doubleSlotServices.some(name => 
+      selectedService.name?.toLowerCase().includes(name.toLowerCase())
+    )
 
     try {
       // If this service needs double slot, check if next slot is available
@@ -907,27 +888,33 @@ export default function Home() {
                   className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer"
                   value={selectedService?.id || ''}
                   onChange={(e) => {
-                    const service = SERVICES.find(s => s.id === parseInt(e.target.value))
+                    const service = priceList.find(s => s.id === e.target.value)
                     setSelectedService(service)
                     setSelectedAddons([]) // Reset addons when service changes
                   }}
                 >
                   <option value="">-- Izaberite uslugu --</option>
-                  {SERVICES.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} {service.price ? `- ${service.price.toLocaleString()} RSD` : '- cena po dogovoru'}
-                    </option>
-                  ))}
+                  {priceList.filter(s => !s.is_additional).map((service) => {
+                    const isLoc2 = selectedSalon?.name === 'Tension Barber II'
+                    const displayPrice = getPriceForLocation(service, isLoc2)
+                    return (
+                      <option key={service.id} value={service.id}>
+                        {service.name} {displayPrice ? `- ${displayPrice.toLocaleString()} RSD` : '- cena po dogovoru'}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
               
               {/* Addon services - only show for haircut services */}
-              {selectedService && SISANJE_SERVICE_IDS.includes(selectedService.id) && (
+              {selectedService && selectedService.name?.toLowerCase().includes('šišanje') && (
                 <div className="bg-zinc-800/50 rounded-lg p-3">
                   <label className="text-xs text-gray-400 block mb-2">Dodatne usluge (opciono)</label>
                   <div className="space-y-1.5">
-                    {ADDON_SERVICES.map((addon) => {
+                    {priceList.filter(s => s.is_additional).map((addon) => {
                       const isSelected = selectedAddons.some(a => a.id === addon.id)
+                      const isLoc2 = selectedSalon?.name === 'Tension Barber II'
+                      const addonPrice = getPriceForLocation(addon, isLoc2)
                       return (
                         <button
                           key={addon.id}
@@ -936,7 +923,7 @@ export default function Home() {
                             if (isSelected) {
                               setSelectedAddons(selectedAddons.filter(a => a.id !== addon.id))
                             } else {
-                              setSelectedAddons([...selectedAddons, addon])
+                              setSelectedAddons([...selectedAddons, { ...addon, price: addonPrice }])
                             }
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded text-sm transition
@@ -947,7 +934,7 @@ export default function Home() {
                           <span>{addon.name}</span>
                           <span className="flex items-center gap-2">
                             <span className={isSelected ? 'text-black/70' : 'text-gray-400'}>
-                              {addon.price} RSD
+                              {addonPrice ? `${addonPrice.toLocaleString()} RSD` : 'po dogovoru'}
                             </span>
                             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold
                               ${isSelected ? 'bg-black text-white' : 'bg-white/20 text-white'}`}>
