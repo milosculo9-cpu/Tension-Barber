@@ -93,6 +93,7 @@ export default function Dashboard() {
   const [newBarberName, setNewBarberName] = useState('');
   const [newBarberLocation, setNewBarberLocation] = useState('');
   const [editServicePrice, setEditServicePrice] = useState('');
+  const [editServicePriceLocation2, setEditServicePriceLocation2] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imgErrors, setImgErrors] = useState({});
   
@@ -886,18 +887,22 @@ export default function Dashboard() {
   };
 
   const updateServicePrice = async () => {
-    if (!editingService || !editServicePrice) return;
+    if (!editingService) return;
     
-    const price = parseInt(editServicePrice);
-    if (isNaN(price)) return;
+    const price = editServicePrice ? parseInt(editServicePrice) : null;
+    const priceLocation2 = editServicePriceLocation2 ? parseInt(editServicePriceLocation2) : null;
     
     await supabase
       .from('services')
-      .update({ price })
+      .update({ 
+        price: price,
+        price_location2: priceLocation2
+      })
       .eq('id', editingService.id);
     
     setEditingService(null);
     setEditServicePrice('');
+    setEditServicePriceLocation2('');
     loadServices();
   };
 
@@ -1717,20 +1722,29 @@ export default function Dashboard() {
                       {services.map(service => (
                         <div
                           key={service.id}
-                          className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center"
+                          className="w-full bg-white/5 rounded-lg p-4"
                         >
                           <button
-                            onClick={() => { setEditingService(service); setEditServicePrice(service.price?.toString() || ''); }}
-                            className="flex-1 flex justify-between items-center text-left"
+                            onClick={() => { 
+                              setEditingService(service); 
+                              setEditServicePrice(service.price?.toString() || ''); 
+                              setEditServicePriceLocation2(service.price_location2?.toString() || '');
+                            }}
+                            className="w-full text-left"
                           >
-                            <span className="text-sm">{service.name}</span>
-                            <span className="text-white/50">{service.price ? `${service.price.toLocaleString()} RSD` : 'po dogovoru'}</span>
-                          </button>
-                          <button
-                            onClick={() => deleteService(service.id)}
-                            className="ml-3 text-red-400 hover:text-red-300 p-1"
-                          >
-                            ✕
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-sm font-medium">{service.name}</span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); deleteService(service.id); }}
+                                className="text-red-400 hover:text-red-300 p-1"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <div className="flex justify-between text-xs text-white/50">
+                              <span>Lokal I: {service.price ? `${service.price.toLocaleString()} RSD` : 'po dogovoru'}</span>
+                              <span>Lokal II: {service.price_location2 ? `${service.price_location2.toLocaleString()} RSD` : 'po dogovoru'}</span>
+                            </div>
                           </button>
                         </div>
                       ))}
@@ -1974,17 +1988,28 @@ export default function Dashboard() {
           <div className="bg-neutral-900 w-full max-w-md rounded-t-2xl p-6">
             <h3 className="text-lg font-medium mb-4">{editingService.name}</h3>
             <div className="mb-4">
-              <label className="block text-white/40 text-xs mb-2">CENA (RSD)</label>
+              <label className="block text-white/40 text-xs mb-2">CENA LOKAL I (RSD)</label>
               <input
                 type="number"
                 value={editServicePrice}
                 onChange={(e) => setEditServicePrice(e.target.value)}
+                placeholder="Ostaviti prazno za 'po dogovoru'"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-white/40 text-xs mb-2">CENA LOKAL II (RSD)</label>
+              <input
+                type="number"
+                value={editServicePriceLocation2}
+                onChange={(e) => setEditServicePriceLocation2(e.target.value)}
+                placeholder="Ostaviti prazno za 'po dogovoru'"
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg"
               />
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { setEditingService(null); setEditServicePrice(''); }}
+                onClick={() => { setEditingService(null); setEditServicePrice(''); setEditServicePriceLocation2(''); }}
                 className="flex-1 bg-white/10 text-white py-3 rounded-lg"
               >
                 OTKAZI
