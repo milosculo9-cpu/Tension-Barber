@@ -398,31 +398,26 @@ export default function Home() {
           .eq('slot_time', nextSlotTime + ':00')
       }
 
-      // Generate cancellation token on frontend
-      const cancellationToken = crypto.randomUUID()
-      
-      const { data, error } = await supabase
-        .from('appointments')
-        .insert([
-          {
-            barber_id: selectedBarber.id,
-            service_name: fullServiceName,
-            service_price: fullServicePrice,
-            customer_name: form.name,
-            customer_email: form.email,
-            customer_phone: form.phone,
-            customer_birthday: (form.birthYear && form.birthMonth && form.birthDay) 
-              ? `${form.birthYear}-${form.birthMonth}-${form.birthDay}` 
-              : null,
-            appointment_date: selectedDate.iso,
-            appointment_time: selectedTime + ':00',
-            duration_minutes: needsDoubleSlot ? 60 : 30,
-            status: 'confirmed',
-            cancellation_token: cancellationToken
-          }
-        ])
+      // Use RPC function to create appointment and get cancellation token
+      const { data, error } = await supabase.rpc('create_appointment', {
+        p_barber_id: selectedBarber.id,
+        p_service_name: fullServiceName,
+        p_service_price: fullServicePrice,
+        p_customer_name: form.name,
+        p_customer_email: form.email || null,
+        p_customer_phone: form.phone,
+        p_customer_birthday: (form.birthYear && form.birthMonth && form.birthDay) 
+          ? `${form.birthYear}-${form.birthMonth}-${form.birthDay}` 
+          : null,
+        p_appointment_date: selectedDate.iso,
+        p_appointment_time: selectedTime + ':00',
+        p_duration_minutes: needsDoubleSlot ? 60 : 30,
+        p_status: 'confirmed'
+      })
 
       if (error) throw error
+      
+      const cancellationToken = data?.[0]?.cancellation_token
 
       // Mark the main slot as booked
       await supabase
