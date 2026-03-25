@@ -436,6 +436,8 @@ export default function Home() {
             status: 'confirmed'
           }
         ])
+        .select('cancellation_token')
+        .single()
 
       if (error) throw error
 
@@ -455,7 +457,7 @@ export default function Home() {
 
       localStorage.setItem('tensionBarberCustomer', JSON.stringify(form))
 
-      // Send confirmation email
+      // Send confirmation email with cancellation token
       try {
         await fetch('/api/send-confirmation', {
           method: 'POST',
@@ -468,7 +470,8 @@ export default function Home() {
             barberName: selectedBarber.name,
             appointmentDate: selectedDate.iso,
             appointmentTime: selectedTime,
-            salonAddress: selectedSalon.address
+            salonAddress: selectedSalon.address,
+            cancellationToken: data?.cancellation_token
           })
         })
       } catch (emailError) {
