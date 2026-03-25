@@ -494,7 +494,7 @@ export default function Home() {
 
   const getBarberImage = (barber) => {
     // Always use local images for better performance (Vercel CDN)
-    return `/images/barbers/${barber.slug}.jpeg`
+    return `/barbers/${barber.slug}.jpeg`
   }
 
   return (
@@ -504,7 +504,7 @@ export default function Home() {
       {isLoading && (
         <div className={`fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center transition-opacity duration-1000 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
           <img 
-            src={'/images/logo/logo.white.PNG'} 
+            src={'/logo/logo.white.PNG'} 
             alt="Tension Barber" 
             className="w-60 md:w-72 lg:w-80 animate-pulse-logo mt-1 md:-mt-8"
           />
@@ -524,7 +524,7 @@ export default function Home() {
           <div
             key={i}
             className={`slide ${currentSlide === i ? 'active' : ''}`}
-            style={{ backgroundImage: `url(/images/backgrounds/${img})` }}
+            style={{ backgroundImage: `url(/backgrounds/${img})` }}
           />
         ))}
         
@@ -532,7 +532,7 @@ export default function Home() {
         
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-4">
           <img 
-            src={'/images/logo/logo.white.PNG'} 
+            src={'/logo/logo.white.PNG'} 
             alt="Tension Barber" 
             className="w-60 md:w-72 lg:w-80"
           />
@@ -580,7 +580,7 @@ export default function Home() {
               >
                 <div className="aspect-[16/10] w-full">
                   <img 
-                    src={`/images/shops/${salon.image}`}
+                    src={`/shops/${salon.image}`}
                     alt={salon.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
@@ -1093,7 +1093,7 @@ export default function Home() {
           ${bookingAnimation === 'fade' ? 'bg-black/0' : ''}`}
         >
           <img 
-            src={'/images/logo/logo.white.PNG'} 
+            src={'/logo/logo.white.PNG'} 
             alt="Tension Barber" 
             className={`w-48 md:w-60 transition-all duration-500
               ${bookingAnimation === 'logo' ? 'opacity-100 scale-100' : ''}
