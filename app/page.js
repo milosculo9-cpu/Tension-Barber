@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+// Local image paths (Vercel CDN)
+const getLogoUrl = (variant) => `/logo/logo.${variant}.PNG`
+const getBarberImageUrl = (slug) => `/barbers/${slug}.jpeg`
+const getBackgroundImageUrl = (img) => `/backgrounds/${img}`
+
 // Desktop hero images
 const DESKTOP_HERO_IMAGES = [
   'IMG_8161.jpeg',
@@ -25,6 +30,42 @@ const MOBILE_HERO_IMAGES = [
   'mobile/5.jpeg',
   'mobile/6.jpeg',
 ]
+
+const SERVICES = [
+  { id: 1, name: 'Šišanje "Fejd"', price: 1200 },
+  { id: 2, name: 'Šišanje duža kosa', price: 1500 },
+  { id: 3, name: 'Šišanje zatvorski', price: 800 },
+  { id: 4, name: 'Brijanje glave britvom', price: 800 },
+  { id: 5, name: 'Trimovanje i konture brade', price: 600 },
+  { id: 6, name: 'Konture brade', price: 350 },
+  { id: 7, name: 'Oblikovanje obrva koncem', price: 400 },
+  { id: 8, name: 'Oblikovanje obrva britvom', price: 300 },
+  { id: 9, name: 'Pranje kose', price: 350 },
+  { id: 10, name: 'Vosak uši', price: 300 },
+  { id: 11, name: 'Vosak nos', price: 300 },
+  { id: 12, name: 'Farbanje kose', price: null },
+  { id: 13, name: 'Farbanje brade', price: null },
+  { id: 14, name: 'Tension Full Paket', price: 3000 },
+  { id: 15, name: '"Vanredno" šišanje', price: 1500 },
+  { id: 16, name: 'Tension All Inclusive', price: 3500 },
+]
+
+// Additional services that can be added to haircut
+const ADDON_SERVICES = [
+  { id: 101, name: 'Oblikovanje obrva britvom', price: 300 },
+  { id: 102, name: 'Vosak nos', price: 300 },
+  { id: 103, name: 'Vosak uši', price: 300 },
+  { id: 104, name: 'Pranje kose', price: 350 },
+  { id: 105, name: 'Konture brade', price: 350 },
+  { id: 106, name: 'Oblikovanje obrva koncem', price: 400 },
+  { id: 107, name: 'Trimovanje i konture brade', price: 600 },
+]
+
+// Services that trigger addon selection (contain "šišanje" or are haircut packages)
+const SISANJE_SERVICE_IDS = [1, 2, 3, 15] // Fejd, Duža kosa, Zatvorski, Vanredno
+
+// Services that REQUIRE double slot (Tension packages)
+const DOUBLE_SLOT_SERVICE_IDS = [14, 16] // Tension Full Paket, Tension All Inclusive
 
 // Generate dates for next 2 weeks
 function generateDates() {
@@ -74,38 +115,28 @@ export default function Home() {
   const [availableSlots, setAvailableSlots] = useState({})
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [priceList, setPriceList] = useState([])
-  const [mainServices, setMainServices] = useState([])
-  const [addonServices, setAddonServices] = useState([])
   
   const dates = generateDates()
   
   // Get current hero images based on device type
   const HERO_IMAGES = isMobile ? MOBILE_HERO_IMAGES : DESKTOP_HERO_IMAGES
 
-  // Load price list and services from database
+  // Load price list from database
   useEffect(() => {
-    const loadServices = async () => {
+    const loadPriceList = async () => {
       const { data } = await supabase
         .from('services')
         .select('*')
         .order('display_order')
-      if (data) {
-        const servicesWithParsedPrice = data.map(s => ({ ...s, price: s.price ? parseFloat(s.price) : null }))
-        setPriceList(servicesWithParsedPrice)
-        
-        // Filter active services for booking form
-        const activeServices = servicesWithParsedPrice.filter(s => s.is_active)
-        setMainServices(activeServices.filter(s => !s.is_additional))
-        setAddonServices(activeServices.filter(s => s.is_additional))
-      }
+      if (data) setPriceList(data.map(s => ({ ...s, price: s.price ? parseFloat(s.price) : null })))
     }
-    loadServices()
+    loadPriceList()
 
-    // Realtime subscription for services changes
+    // Realtime subscription for price list changes
     const channel = supabase
       .channel('services-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => {
-        loadServices()
+        loadPriceList()
       })
       .subscribe()
 
@@ -352,8 +383,8 @@ export default function Home() {
       : selectedService.name
     const fullServicePrice = (selectedService.price || 0) + addonTotal
     
-    // Services with duration >= 60 minutes need double slot
-    const needsDoubleSlot = (selectedService.duration_minutes || 30) >= 60
+    // Only Tension Full Paket and Tension All Inclusive need double slot
+    const needsDoubleSlot = DOUBLE_SLOT_SERVICE_IDS.includes(selectedService.id)
 
     try {
       // If this service needs double slot, check if next slot is available
@@ -400,7 +431,7 @@ export default function Home() {
               : null,
             appointment_date: selectedDate.iso,
             appointment_time: selectedTime + ':00',
-            duration_minutes: selectedService.duration_minutes || 30,
+            duration_minutes: needsDoubleSlot ? 60 : 30,
             status: 'confirmed'
           }
         ])
@@ -493,8 +524,8 @@ export default function Home() {
   }
 
   const getBarberImage = (barber) => {
-    // Always use local images for better performance (Vercel CDN)
-    return `/barbers/${barber.slug}.jpeg`
+    if (barber.image_url) return barber.image_url
+    return getBarberImageUrl(barber.slug)
   }
 
   return (
@@ -504,7 +535,7 @@ export default function Home() {
       {isLoading && (
         <div className={`fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center transition-opacity duration-1000 ${preloaderFading ? 'opacity-0' : 'opacity-100'}`}>
           <img 
-            src={'/logo/logo.white.PNG'} 
+            src={getLogoUrl('white')} 
             alt="Tension Barber" 
             className="w-60 md:w-72 lg:w-80 animate-pulse-logo mt-1 md:-mt-8"
           />
@@ -524,7 +555,7 @@ export default function Home() {
           <div
             key={i}
             className={`slide ${currentSlide === i ? 'active' : ''}`}
-            style={{ backgroundImage: `url(/backgrounds/${img})` }}
+            style={{ backgroundImage: `url(${getBackgroundImageUrl(img)})` }}
           />
         ))}
         
@@ -532,7 +563,7 @@ export default function Home() {
         
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 px-4">
           <img 
-            src={'/logo/logo.white.PNG'} 
+            src={getLogoUrl('white')} 
             alt="Tension Barber" 
             className="w-60 md:w-72 lg:w-80"
           />
@@ -848,13 +879,13 @@ export default function Home() {
                   className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer"
                   value={selectedService?.id || ''}
                   onChange={(e) => {
-                    const service = mainServices.find(s => s.id === e.target.value)
+                    const service = SERVICES.find(s => s.id === parseInt(e.target.value))
                     setSelectedService(service)
                     setSelectedAddons([]) // Reset addons when service changes
                   }}
                 >
                   <option value="">-- Izaberite uslugu --</option>
-                  {mainServices.map((service) => (
+                  {SERVICES.map((service) => (
                     <option key={service.id} value={service.id}>
                       {service.name} {service.price ? `- ${service.price.toLocaleString()} RSD` : '- cena po dogovoru'}
                     </option>
@@ -862,12 +893,12 @@ export default function Home() {
                 </select>
               </div>
               
-              {/* Addon services - only show for haircut services (not packages) */}
-              {selectedService && (selectedService.duration_minutes || 30) < 60 && (
+              {/* Addon services - only show for haircut services */}
+              {selectedService && SISANJE_SERVICE_IDS.includes(selectedService.id) && (
                 <div className="bg-zinc-800/50 rounded-lg p-3">
                   <label className="text-xs text-gray-400 block mb-2">Dodatne usluge (opciono)</label>
                   <div className="space-y-1.5">
-                    {addonServices.map((addon) => {
+                    {ADDON_SERVICES.map((addon) => {
                       const isSelected = selectedAddons.some(a => a.id === addon.id)
                       return (
                         <button
@@ -888,7 +919,7 @@ export default function Home() {
                           <span>{addon.name}</span>
                           <span className="flex items-center gap-2">
                             <span className={isSelected ? 'text-black/70' : 'text-gray-400'}>
-                              {addon.price?.toLocaleString()} RSD
+                              {addon.price} RSD
                             </span>
                             <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold
                               ${isSelected ? 'bg-black text-white' : 'bg-white/20 text-white'}`}>
@@ -903,7 +934,7 @@ export default function Home() {
                     <div className="mt-2 pt-2 border-t border-zinc-700 flex justify-between text-sm">
                       <span className="text-gray-400">Dodatno:</span>
                       <span className="text-white font-medium">
-                        +{selectedAddons.reduce((sum, a) => sum + (a.price || 0), 0).toLocaleString()} RSD
+                        +{selectedAddons.reduce((sum, a) => sum + a.price, 0).toLocaleString()} RSD
                       </span>
                     </div>
                   )}
@@ -1093,7 +1124,7 @@ export default function Home() {
           ${bookingAnimation === 'fade' ? 'bg-black/0' : ''}`}
         >
           <img 
-            src={'/logo/logo.white.PNG'} 
+            src={getLogoUrl('white')} 
             alt="Tension Barber" 
             className={`w-48 md:w-60 transition-all duration-500
               ${bookingAnimation === 'logo' ? 'opacity-100 scale-100' : ''}
