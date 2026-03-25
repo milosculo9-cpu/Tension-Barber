@@ -398,6 +398,9 @@ export default function Home() {
           .eq('slot_time', nextSlotTime + ':00')
       }
 
+      // Generate cancellation token on frontend
+      const cancellationToken = crypto.randomUUID()
+      
       const { data, error } = await supabase
         .from('appointments')
         .insert([
@@ -414,11 +417,10 @@ export default function Home() {
             appointment_date: selectedDate.iso,
             appointment_time: selectedTime + ':00',
             duration_minutes: needsDoubleSlot ? 60 : 30,
-            status: 'confirmed'
+            status: 'confirmed',
+            cancellation_token: cancellationToken
           }
         ])
-        .select('cancellation_token')
-        .single()
 
       if (error) throw error
 
@@ -452,7 +454,7 @@ export default function Home() {
             appointmentDate: selectedDate.iso,
             appointmentTime: selectedTime,
             salonAddress: selectedSalon.address,
-            cancellationToken: data?.cancellation_token
+            cancellationToken: cancellationToken
           })
         })
       } catch (emailError) {
