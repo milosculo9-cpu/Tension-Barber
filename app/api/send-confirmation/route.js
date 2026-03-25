@@ -103,6 +103,13 @@ export async function POST(request) {
             </td>
           </tr>
           
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding: 10px 20px;">
+              <img src="https://tension-barber.rs/logo/logo.white.PNG" alt="Tension Barber" width="140" style="display: block; margin: 0 auto;" />
+            </td>
+          </tr>
+          
           <!-- Success message -->
           <tr>
             <td align="center" style="padding: 20px;">
