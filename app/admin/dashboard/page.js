@@ -329,10 +329,21 @@ export default function Dashboard() {
     await loadStats(barberData.id);
     await loadAllActiveServices(); // Load services for manual booking
     
-    if (barberData.is_admin) {
-      loadServices();
+    // IDs of barbers who can see all appointments (Crni, Kole, Anđelo)
+    const canSeeAll = [
+      '4112f49c-3106-412a-a1a4-4b41a758a943', // Crni
+      'c39c8070-1e50-43f4-a97a-a8f5d30f7690', // Kole
+      '891bb22f-8377-4dc7-b14a-c7544aee6276'  // Anđelo
+    ];
+    
+    // Load data for "Svi Termini" tab
+    if (canSeeAll.includes(barberData.id)) {
       loadAllBarbers();
       loadLocations();
+    }
+    
+    if (barberData.is_admin) {
+      loadServices();
     }
     
     setLoading(false);
