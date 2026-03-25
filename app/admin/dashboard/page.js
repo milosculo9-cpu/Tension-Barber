@@ -115,6 +115,10 @@ export default function Dashboard() {
   const [allAppointmentsData, setAllAppointmentsData] = useState([]);
   const [allAppointmentsDate, setAllAppointmentsDate] = useState(new Date());
   const [selectedBarberFilter, setSelectedBarberFilter] = useState('all');
+  const [allBarberSlots, setAllBarberSlots] = useState({}); // { barberId: { available: [], booked: [], duration: 30 } }
+  const [selectedBarberForBooking, setSelectedBarberForBooking] = useState(null);
+  const [allViewManualBookingSlot, setAllViewManualBookingSlot] = useState(null);
+  const [showAllViewManualBooking, setShowAllViewManualBooking] = useState(false);
   
   const fileInputRef = useRef(null);
   const newBarberFileInputRef = useRef(null);
@@ -351,7 +355,7 @@ export default function Dashboard() {
   };
 
   const loadAllBarbers = async () => {
-    const { data } = await supabase.from('barbers').select('*, locations(name)').order('name');
+    const { data } = await supabase.from('barbers').select('*, locations(name)').order('display_order');
     if (data) setAllBarbers(data);
   };
 
@@ -472,6 +476,7 @@ export default function Dashboard() {
   const loadAllAppointments = async (date) => {
     const dateStr = formatDate(date || allAppointmentsDate);
     
+    // Load appointments
     const { data } = await supabase
       .from('appointments')
       .select('*, barbers(name, location_id, locations(name))')
@@ -482,6 +487,74 @@ export default function Dashboard() {
     if (data) {
       setAllAppointmentsData(data);
     }
+    
+    // Load slots for ALL barbers
+    const { data: allSlots } = await supabase
+      .from('barber_available_slots')
+      .select('*')
+      .eq('slot_date', dateStr);
+    
+    // Load slot durations for ALL barbers
+    const { data: allDurations } = await supabase
+      .from('barber_slot_settings')
+      .select('*')
+      .eq('slot_date', dateStr);
+    
+    // Organize by barber
+    const slotsByBarber = {};
+    allBarbers.forEach(b => {
+      const barberSlots = allSlots?.filter(s => s.barber_id === b.id) || [];
+      const barberDuration = allDurations?.find(d => d.barber_id === b.id)?.slot_duration || 30;
+      slotsByBarber[b.id] = {
+        available: barberSlots.filter(s => !s.is_booked).map(s => s.slot_time.slice(0, 5)),
+        booked: barberSlots.filter(s => s.is_booked).map(s => s.slot_time.slice(0, 5)),
+        duration: barberDuration
+      };
+    });
+    
+    setAllBarberSlots(slotsByBarber);
+  };
+
+  // Book slot for any barber (from all-view)
+  const bookSlotForBarber = async (targetBarber, time, customerData) => {
+    const dateStr = formatDate(allAppointmentsDate);
+    
+    // Create appointment
+    const { error } = await supabase
+      .from('appointments')
+      .insert({
+        barber_id: targetBarber.id,
+        customer_name: customerData.name,
+        customer_phone: customerData.phone,
+        service_id: customerData.service_id,
+        service_name: customerData.service_name,
+        service_price: customerData.service_price,
+        appointment_date: dateStr,
+        appointment_time: time + ':00',
+        status: 'confirmed',
+        duration_minutes: customerData.duration || 30
+      });
+    
+    if (error) {
+      console.error('Error creating appointment:', error);
+      return false;
+    }
+    
+    // Mark slot as booked
+    await supabase
+      .from('barber_available_slots')
+      .upsert({
+        barber_id: targetBarber.id,
+        slot_date: dateStr,
+        slot_time: time + ':00',
+        is_booked: true
+      }, {
+        onConflict: 'barber_id,slot_date,slot_time'
+      });
+    
+    // Reload
+    loadAllAppointments(allAppointmentsDate);
+    return true;
   };
 
   const loadStats = async (barberId) => {
@@ -1057,13 +1130,16 @@ export default function Dashboard() {
                 {days.map((day, i) => {
                   const isSelected = formatDate(day) === formatDate(allAppointmentsDate);
                   const isToday = formatDate(day) === formatDate(new Date());
+                  const isPast = day < new Date(new Date().setHours(0, 0, 0, 0));
                   return (
                     <button
                       key={i}
-                      onClick={() => setAllAppointmentsDate(day)}
+                      onClick={() => !isPast && setAllAppointmentsDate(day)}
+                      disabled={isPast}
                       className={`flex-shrink-0 w-14 py-2 rounded-lg text-center transition-all
                         ${isSelected ? 'bg-white text-black' : 'bg-white/5 text-white'}
-                        ${isToday && !isSelected ? 'ring-1 ring-white/30' : ''}`}
+                        ${isToday && !isSelected ? 'ring-1 ring-white/30' : ''}
+                        ${isPast ? 'opacity-30 cursor-not-allowed' : ''}`}
                     >
                       <div className="text-[10px] opacity-60">{dayNames[day.getDay()]}</div>
                       <div className="text-lg font-medium">{day.getDate()}</div>
@@ -1075,21 +1151,21 @@ export default function Dashboard() {
             </section>
 
             <section>
-              <h2 className="text-white/40 text-xs tracking-wider mb-3">FILTRIRAJ PO BERBERU</h2>
-              <div className="flex gap-2 overflow-x-auto pb-2">
+              <h2 className="text-white/40 text-xs tracking-wider mb-3">FILTRIRAJ PO LOKALU</h2>
+              <div className="flex gap-2">
                 <button
                   onClick={() => setSelectedBarberFilter('all')}
-                  className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap ${selectedBarberFilter === 'all' ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
+                  className={`px-4 py-2 rounded-lg text-sm ${selectedBarberFilter === 'all' ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
                 >
                   Svi
                 </button>
-                {allBarbers.map(b => (
+                {locations.map(loc => (
                   <button
-                    key={b.id}
-                    onClick={() => setSelectedBarberFilter(b.id)}
-                    className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap ${selectedBarberFilter === b.id ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
+                    key={loc.id}
+                    onClick={() => setSelectedBarberFilter(loc.id)}
+                    className={`px-4 py-2 rounded-lg text-sm ${selectedBarberFilter === loc.id ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
                   >
-                    {b.name}
+                    {loc.name.includes('Petra') ? 'Lokal I' : 'Lokal II'}
                   </button>
                 ))}
               </div>
@@ -1097,50 +1173,169 @@ export default function Dashboard() {
 
             <section>
               <h2 className="text-white/40 text-xs tracking-wider mb-3">
-                TERMINI ZA {new Date(allAppointmentsDate).toLocaleDateString('sr-RS')}
+                TERMINI SVIH BERBERA - {new Date(allAppointmentsDate).toLocaleDateString('sr-RS')}
               </h2>
               
-              {allAppointmentsData.filter(a => selectedBarberFilter === 'all' || a.barber_id === selectedBarberFilter).length === 0 ? (
-                <p className="text-white/40 text-center py-8">Nema zakazanih termina za ovaj dan</p>
-              ) : (
-                <div className="space-y-3">
-                  {allAppointmentsData
-                    .filter(a => selectedBarberFilter === 'all' || a.barber_id === selectedBarberFilter)
-                    .map(apt => {
-                      const isBlacklistedCustomer = apt.customer_phone && blacklist.some(b => b.customer_phone === apt.customer_phone);
-                      const blacklistEntry = isBlacklistedCustomer ? blacklist.find(b => b.customer_phone === apt.customer_phone) : null;
-                      
-                      return (
-                        <div 
-                          key={apt.id} 
-                          className={`p-4 rounded-lg ${apt.no_show ? 'bg-red-500/20' : isBlacklistedCustomer ? 'bg-gradient-to-r from-green-600/30 to-red-600/30' : 'bg-white/5'}`}
-                          onClick={() => setSelectedAppointment(apt)}
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="font-medium text-lg">{apt.customer_name}</p>
-                              <p className="text-white/60 text-sm">{apt.barbers?.name} • {apt.barbers?.locations?.name?.includes('Petra') ? 'Lokal I' : 'Lokal II'}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xl font-bold">{apt.appointment_time?.slice(0, 5)}</p>
-                              {apt.no_show && <p className="text-red-400 text-xs">NIJE DOŠAO</p>}
-                            </div>
+              <div className="space-y-6">
+                {allBarbers
+                  .filter(b => selectedBarberFilter === 'all' || b.location_id === selectedBarberFilter)
+                  .map(targetBarber => {
+                    const barberData = allBarberSlots[targetBarber.id] || { available: [], booked: [], duration: 30 };
+                    const barberTimeSlots = generateTimeSlots(targetBarber.locations?.name, barberData.duration);
+                    const barberLocation = locations.find(l => l.id === targetBarber.location_id);
+                    
+                    return (
+                      <div key={targetBarber.id} className="bg-white/5 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-medium">{targetBarber.name}</h3>
+                            <p className="text-white/40 text-xs">
+                              {barberLocation?.name?.includes('Petra') ? 'Lokal I - Bulevar kralja Petra' : 'Lokal II - Bulevar patrijarha Pavla'}
+                            </p>
                           </div>
-                          <div className="flex justify-between text-sm text-white/60">
-                            <span>{apt.service_name}</span>
-                            <span>{apt.service_price?.toLocaleString() || 0} RSD</span>
+                          <div className="text-right text-xs text-white/40">
+                            <p>Trajanje: {barberData.duration} min</p>
+                            <p>Slobodno: {barberData.available.length} | Zakazano: {barberData.booked.length}</p>
                           </div>
-                          {isBlacklistedCustomer && (
-                            <div className="mt-2 p-2 bg-red-500/20 rounded text-red-400 text-xs">
-                              ⚠️ CRNA LISTA - Duguje: {blacklistEntry?.missed_service_price?.toLocaleString() || 0} RSD ({blacklistEntry?.missed_service_name})
-                            </div>
-                          )}
                         </div>
-                      );
-                    })}
-                </div>
-              )}
+                        
+                        <div className="grid grid-cols-6 sm:grid-cols-8 gap-1">
+                          {barberTimeSlots.map(time => {
+                            const isAvailable = barberData.available.includes(time);
+                            const isBooked = barberData.booked.includes(time);
+                            
+                            // Find appointment for this slot
+                            const slotAppointment = allAppointmentsData.find(a => 
+                              a.barber_id === targetBarber.id &&
+                              a.appointment_time?.slice(0, 5) === time
+                            );
+                            
+                            const isPast = slotAppointment && (() => {
+                              const aptDate = new Date(allAppointmentsDate);
+                              const [hours, minutes] = time.split(':').map(Number);
+                              aptDate.setHours(hours, minutes, 0, 0);
+                              const endTime = new Date(aptDate.getTime() + (slotAppointment.duration_minutes || 30) * 60 * 1000);
+                              return new Date() > endTime;
+                            })();
+                            
+                            const isNoShow = slotAppointment?.no_show;
+                            const isBirthday = slotAppointment?.customer_birthday && (() => {
+                              const birthday = new Date(slotAppointment.customer_birthday);
+                              const aptDate = new Date(allAppointmentsDate);
+                              return birthday.getDate() === aptDate.getDate() && 
+                                     birthday.getMonth() === aptDate.getMonth();
+                            })();
+                            const isBlacklisted = slotAppointment?.customer_phone && 
+                              blacklist.some(b => b.customer_phone === slotAppointment.customer_phone);
+                            
+                            let bgColor = 'bg-white/5 text-white/40';
+                            let useGradient = false;
+                            if (isAvailable && !isBooked) bgColor = 'bg-white text-black';
+                            if (isBooked && !isPast && !isNoShow && !isBirthday && !isBlacklisted) bgColor = 'bg-green-600 text-white';
+                            if (isBooked && !isPast && !isNoShow && isBirthday && !isBlacklisted) bgColor = 'bg-blue-500 text-white';
+                            if (isBooked && !isPast && !isNoShow && isBlacklisted) useGradient = true;
+                            if (isBooked && isPast && !isNoShow) bgColor = 'bg-orange-500 text-white';
+                            if (isNoShow) bgColor = 'bg-red-600 text-white';
+                            
+                            return (
+                              <button
+                                key={time}
+                                onClick={() => {
+                                  if (isBooked && slotAppointment) {
+                                    setSelectedAppointment(slotAppointment);
+                                  } else if (isAvailable) {
+                                    setSelectedBarberForBooking(targetBarber);
+                                    setAllViewManualBookingSlot(time);
+                                    setShowAllViewManualBooking(true);
+                                  }
+                                }}
+                                className={`py-2 rounded text-xs font-medium transition-all
+                                  ${useGradient ? 'text-white' : bgColor}`}
+                                style={useGradient ? {
+                                  background: 'linear-gradient(135deg, #16a34a 50%, #dc2626 50%)'
+                                } : {}}
+                              >
+                                {time}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+              
+              <div className="flex gap-3 mt-4 justify-center text-xs flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-white/10 rounded border border-white/20"></span> Nedostupan</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-white rounded"></span> Slobodan</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-600 rounded"></span> Zakazan</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-500 rounded"></span> Rođendan</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{background: 'linear-gradient(135deg, #16a34a 50%, #dc2626 50%)'}}></span> Crna lista</span>
+              </div>
             </section>
+          </div>
+        )}
+
+        {/* Manual Booking Modal for All View */}
+        {showAllViewManualBooking && selectedBarberForBooking && (
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-medium">Zakaži termin</h3>
+                  <p className="text-white/40 text-sm">{selectedBarberForBooking.name} - {formatDate(allAppointmentsDate)} u {allViewManualBookingSlot}</p>
+                </div>
+                <button onClick={() => {
+                  setShowAllViewManualBooking(false);
+                  setSelectedBarberForBooking(null);
+                  setAllViewManualBookingSlot(null);
+                }} className="text-white/40 text-2xl">&times;</button>
+              </div>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const serviceSelect = form.service;
+                const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
+                
+                const success = await bookSlotForBarber(selectedBarberForBooking, allViewManualBookingSlot, {
+                  name: form.name.value,
+                  phone: form.phone.value,
+                  service_id: form.service.value,
+                  service_name: selectedOption.dataset.name,
+                  service_price: parseInt(selectedOption.dataset.price) || 0,
+                  duration: parseInt(selectedOption.dataset.duration) || 30
+                });
+                
+                if (success) {
+                  setShowAllViewManualBooking(false);
+                  setSelectedBarberForBooking(null);
+                  setAllViewManualBookingSlot(null);
+                }
+              }} className="p-4 space-y-4">
+                <div>
+                  <label className="text-white/40 text-xs block mb-1">IME KLIJENTA *</label>
+                  <input name="name" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
+                </div>
+                <div>
+                  <label className="text-white/40 text-xs block mb-1">TELEFON *</label>
+                  <input name="phone" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
+                </div>
+                <div>
+                  <label className="text-white/40 text-xs block mb-1">USLUGA *</label>
+                  <select name="service" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2">
+                    <option value="">Izaberi uslugu</option>
+                    {services.filter(s => !s.is_additional).map(s => (
+                      <option key={s.id} value={s.id} data-name={s.name} data-price={s.price} data-duration={s.duration_minutes}>
+                        {s.name} - {s.price ? `${s.price} RSD` : 'Po dogovoru'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button type="submit" className="w-full py-3 bg-white text-black rounded-lg font-medium">
+                  ZAKAŽI
+                </button>
+              </form>
+            </div>
           </div>
         )}
         
