@@ -34,9 +34,19 @@ const formatDate = (date) => date.toISOString().split('T')[0];
 const getNext14Days = () => {
   const days = [];
   const today = new Date();
+  
+  // Find the most recent Wednesday (or today if it's Wednesday)
+  // Sunday = 0, Monday = 1, Tuesday = 2, Wednesday = 3, etc.
+  const dayOfWeek = today.getDay();
+  const daysFromWednesday = dayOfWeek >= 3 ? dayOfWeek - 3 : dayOfWeek + 4;
+  
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - daysFromWednesday);
+  
+  // Generate 14 days starting from that Wednesday
   for (let i = 0; i < 14; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + i);
     days.push(date);
   }
   return days;
@@ -51,6 +61,7 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [availableSlots, setAvailableSlots] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [blacklist, setBlacklist] = useState([]);
   const [stats, setStats] = useState({ total: 0, today: 0, revenue: 0 });
   const [activeTab, setActiveTab] = useState('termini');
   const [saving, setSaving] = useState(false);
@@ -100,13 +111,26 @@ export default function Dashboard() {
   // Blocked slot without appointment
   const [blockedSlotTime, setBlockedSlotTime] = useState(null);
   
+  // All appointments view (for Crni, Kole, Anđelo)
+  const [allAppointmentsData, setAllAppointmentsData] = useState([]);
+  const [allAppointmentsDate, setAllAppointmentsDate] = useState(new Date());
+  const [selectedBarberFilter, setSelectedBarberFilter] = useState('all');
+  
   const fileInputRef = useRef(null);
   const newBarberFileInputRef = useRef(null);
   const router = useRouter();
   const supabase = createClientComponentClient();
   const days = getNext14Days();
 
+  // IDs of barbers who can see all appointments (Crni, Kole, Anđelo)
+  const canSeeAllAppointments = [
+    '4112f49c-3106-412a-a1a4-4b41a758a943', // Crni
+    'c39c8070-1e50-43f4-a97a-a8f5d30f7690', // Kole
+    '891bb22f-8377-4dc7-b14a-c7544aee6276'  // Anđelo
+  ];
+
   const tabs = [
+    { id: 'svi-termini', label: 'Svi Termini' },
     { id: 'termini', label: 'Termini' },
     { id: 'rezervacije', label: 'Rezervacije' },
     { id: 'statistika', label: 'Statistika' },
@@ -179,6 +203,13 @@ export default function Dashboard() {
       loadSlotsLockedState();
     }
   }, [selectedDate, barber]);
+
+  // Load all appointments when viewing 'svi-termini' tab
+  useEffect(() => {
+    if (barber && activeTab === 'svi-termini' && canSeeAllAppointments.includes(barber.id)) {
+      loadAllAppointments(allAppointmentsDate);
+    }
+  }, [allAppointmentsDate, activeTab, barber]);
 
   // Load slots locked state from database
   const loadSlotsLockedState = async () => {
@@ -331,6 +362,32 @@ export default function Dashboard() {
 
   const saveSlotDuration = async (duration) => {
     const dateStr = formatDate(selectedDate);
+    
+    // Check if there are already selected slots for this date
+    const { data: existingSlots } = await supabase
+      .from('barber_available_slots')
+      .select('*')
+      .eq('barber_id', barber.id)
+      .eq('slot_date', dateStr);
+    
+    if (existingSlots && existingSlots.length > 0) {
+      // There are existing slots - show confirmation
+      const bookedCount = existingSlots.filter(s => s.is_booked).length;
+      const availableCount = existingSlots.filter(s => !s.is_booked).length;
+      
+      let message = `Da li želite da promenite trajanje termina za ${dateStr}?\n\n`;
+      message += `Ovo će obrisati sve označene termine:\n`;
+      message += `- Slobodni termini: ${availableCount}\n`;
+      if (bookedCount > 0) {
+        message += `- ZAKAZANI TERMINI: ${bookedCount} (ovi termini će biti OTKAZANI!)\n`;
+      }
+      message += `\nDa li ste sigurni?`;
+      
+      if (!confirm(message)) {
+        return; // User cancelled, don't change duration
+      }
+    }
+    
     setSlotDuration(duration);
     
     // Upsert duration setting
@@ -352,6 +409,7 @@ export default function Dashboard() {
       .eq('slot_date', dateStr);
     
     setAvailableSlots([]);
+    setBookedSlots([]);
   };
 
   const loadSlotsForDate = async () => {
@@ -399,6 +457,31 @@ export default function Dashboard() {
     if (data) {
       setAppointments(data);
     }
+    
+    // Load blacklist
+    const { data: blacklistData } = await supabase
+      .from('blacklist')
+      .select('*');
+    
+    if (blacklistData) {
+      setBlacklist(blacklistData);
+    }
+  };
+
+  // Load all appointments for all barbers (for Crni, Kole, Anđelo view)
+  const loadAllAppointments = async (date) => {
+    const dateStr = formatDate(date || allAppointmentsDate);
+    
+    const { data } = await supabase
+      .from('appointments')
+      .select('*, barbers(name, location_id, locations(name))')
+      .eq('appointment_date', dateStr)
+      .neq('status', 'cancelled')
+      .order('appointment_time', { ascending: true });
+    
+    if (data) {
+      setAllAppointmentsData(data);
+    }
   };
 
   const loadStats = async (barberId) => {
@@ -434,14 +517,29 @@ export default function Dashboard() {
     setStats({ total: total || 0, today: todayCount || 0, revenue });
   };
 
-  // Mark appointment as no-show
-  const markNoShow = async (appointmentId) => {
-    if (!confirm('Označiti da se klijent nije pojavio?')) return;
+  // Mark appointment as no-show and add to blacklist
+  const markNoShow = async (appointmentId, appointment) => {
+    if (!confirm('Označiti da se klijent nije pojavio? Klijent će biti dodat na crnu listu.')) return;
     
+    // Mark as no-show
     await supabase
       .from('appointments')
       .update({ no_show: true })
       .eq('id', appointmentId);
+    
+    // Add to blacklist if phone exists
+    if (appointment?.customer_phone) {
+      await supabase
+        .from('blacklist')
+        .insert({
+          customer_phone: appointment.customer_phone,
+          customer_name: appointment.customer_name,
+          missed_appointment_id: appointmentId,
+          missed_service_name: appointment.service_name,
+          missed_service_price: appointment.service_price,
+          missed_date: appointment.appointment_date
+        });
+    }
     
     setSelectedAppointment(null);
     loadAppointments();
@@ -886,7 +984,16 @@ export default function Dashboard() {
   }
 
   const timeSlots = generateTimeSlots(barber.locations?.name, slotDuration);
-  const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
+  
+  // Determine which tabs to show based on barber permissions
+  const canViewAllTerms = canSeeAllAppointments.includes(barber?.id);
+  let availableTabs = tabs;
+  if (!barber?.is_admin) {
+    availableTabs = availableTabs.filter(t => t.id !== 'podesavanja');
+  }
+  if (!canViewAllTerms) {
+    availableTabs = availableTabs.filter(t => t.id !== 'svi-termini');
+  }
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -941,6 +1048,102 @@ export default function Dashboard() {
 
       <main className="p-4 pb-20 min-h-[60vh]">
         
+        {/* ALL APPOINTMENTS TAB - for Crni, Kole, Anđelo */}
+        {activeTab === 'svi-termini' && canSeeAllAppointments.includes(barber?.id) && (
+          <div className="space-y-6">
+            <section>
+              <h2 className="text-white/40 text-xs tracking-wider mb-3">IZABERI DATUM</h2>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {days.map((day, i) => {
+                  const isSelected = formatDate(day) === formatDate(allAppointmentsDate);
+                  const isToday = formatDate(day) === formatDate(new Date());
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setAllAppointmentsDate(day)}
+                      className={`flex-shrink-0 w-14 py-2 rounded-lg text-center transition-all
+                        ${isSelected ? 'bg-white text-black' : 'bg-white/5 text-white'}
+                        ${isToday && !isSelected ? 'ring-1 ring-white/30' : ''}`}
+                    >
+                      <div className="text-[10px] opacity-60">{dayNames[day.getDay()]}</div>
+                      <div className="text-lg font-medium">{day.getDate()}</div>
+                      <div className="text-[10px] opacity-60">{monthNames[day.getMonth()]}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-white/40 text-xs tracking-wider mb-3">FILTRIRAJ PO BERBERU</h2>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                <button
+                  onClick={() => setSelectedBarberFilter('all')}
+                  className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap ${selectedBarberFilter === 'all' ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
+                >
+                  Svi
+                </button>
+                {allBarbers.map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => setSelectedBarberFilter(b.id)}
+                    className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap ${selectedBarberFilter === b.id ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
+                  >
+                    {b.name}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-white/40 text-xs tracking-wider mb-3">
+                TERMINI ZA {new Date(allAppointmentsDate).toLocaleDateString('sr-RS')}
+              </h2>
+              
+              {allAppointmentsData.filter(a => selectedBarberFilter === 'all' || a.barber_id === selectedBarberFilter).length === 0 ? (
+                <p className="text-white/40 text-center py-8">Nema zakazanih termina za ovaj dan</p>
+              ) : (
+                <div className="space-y-3">
+                  {allAppointmentsData
+                    .filter(a => selectedBarberFilter === 'all' || a.barber_id === selectedBarberFilter)
+                    .map(apt => {
+                      const isBlacklistedCustomer = apt.customer_phone && blacklist.some(b => b.customer_phone === apt.customer_phone);
+                      const blacklistEntry = isBlacklistedCustomer ? blacklist.find(b => b.customer_phone === apt.customer_phone) : null;
+                      
+                      return (
+                        <div 
+                          key={apt.id} 
+                          className={`p-4 rounded-lg ${apt.no_show ? 'bg-red-500/20' : isBlacklistedCustomer ? 'bg-gradient-to-r from-green-600/30 to-red-600/30' : 'bg-white/5'}`}
+                          onClick={() => setSelectedAppointment(apt)}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="font-medium text-lg">{apt.customer_name}</p>
+                              <p className="text-white/60 text-sm">{apt.barbers?.name} • {apt.barbers?.locations?.name?.includes('Petra') ? 'Lokal I' : 'Lokal II'}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xl font-bold">{apt.appointment_time?.slice(0, 5)}</p>
+                              {apt.no_show && <p className="text-red-400 text-xs">NIJE DOŠAO</p>}
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-sm text-white/60">
+                            <span>{apt.service_name}</span>
+                            <span>{apt.service_price?.toLocaleString() || 0} RSD</span>
+                          </div>
+                          {isBlacklistedCustomer && (
+                            <div className="mt-2 p-2 bg-red-500/20 rounded text-red-400 text-xs">
+                              ⚠️ CRNA LISTA - Duguje: {blacklistEntry?.missed_service_price?.toLocaleString() || 0} RSD ({blacklistEntry?.missed_service_name})
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+        
         {activeTab === 'termini' && (
           <div className="space-y-6">
             <section>
@@ -949,13 +1152,16 @@ export default function Dashboard() {
                 {days.map((day, i) => {
                   const isSelected = formatDate(day) === formatDate(selectedDate);
                   const isToday = formatDate(day) === formatDate(new Date());
+                  const isPast = day < new Date(new Date().setHours(0, 0, 0, 0));
                   return (
                     <button
                       key={i}
-                      onClick={() => setSelectedDate(day)}
+                      onClick={() => !isPast && setSelectedDate(day)}
+                      disabled={isPast}
                       className={`flex-shrink-0 w-14 py-2 rounded-lg text-center transition-all
                         ${isSelected ? 'bg-white text-black' : 'bg-white/5 text-white'}
-                        ${isToday && !isSelected ? 'ring-1 ring-white/30' : ''}`}
+                        ${isToday && !isSelected ? 'ring-1 ring-white/30' : ''}
+                        ${isPast ? 'opacity-30 cursor-not-allowed' : ''}`}
                     >
                       <div className="text-[10px] opacity-60">{dayNames[day.getDay()]}</div>
                       <div className="text-lg font-medium">{day.getDate()}</div>
@@ -1027,10 +1233,27 @@ export default function Dashboard() {
                   
                   const isNoShow = slotAppointment?.no_show;
                   
-                  // Determine background color
+                  // Check if it's customer's birthday
+                  const isBirthday = slotAppointment?.customer_birthday && (() => {
+                    const birthday = new Date(slotAppointment.customer_birthday);
+                    const aptDate = new Date(slotAppointment.appointment_date);
+                    return birthday.getDate() === aptDate.getDate() && 
+                           birthday.getMonth() === aptDate.getMonth();
+                  })();
+                  
+                  // Check if customer is blacklisted
+                  const isBlacklisted = slotAppointment?.customer_phone && 
+                    blacklist.some(b => b.customer_phone === slotAppointment.customer_phone);
+                  
+                  // Determine background color/style
                   let bgColor = 'bg-white/5 text-white/40'; // default - not available (gray)
+                  let useGradient = false;
                   if (isAvailable && !isBooked) bgColor = 'bg-white text-black'; // available (white)
-                  if (isBooked && !isPast && !isNoShow) bgColor = 'bg-green-600 text-white'; // booked (green)
+                  if (isBooked && !isPast && !isNoShow && !isBirthday && !isBlacklisted) bgColor = 'bg-green-600 text-white'; // booked (green)
+                  if (isBooked && !isPast && !isNoShow && isBirthday && !isBlacklisted) bgColor = 'bg-blue-500 text-white'; // birthday (blue)
+                  if (isBooked && !isPast && !isNoShow && isBlacklisted) {
+                    useGradient = true; // blacklisted - half green, half red
+                  }
                   if (isBooked && isPast && !isNoShow) bgColor = 'bg-orange-500 text-white'; // past (orange)
                   if (isNoShow) bgColor = 'bg-red-600 text-white'; // no-show (red)
                   
@@ -1082,9 +1305,12 @@ export default function Dashboard() {
                       }}
                       disabled={saving || (slotsLocked && !isAvailable && !isBooked)}
                       className={`py-3 rounded text-sm font-medium transition-all
-                        ${bgColor}
+                        ${useGradient ? 'text-white' : bgColor}
                         ${saving ? 'opacity-50' : ''}
                         ${isBooked ? 'cursor-pointer' : ''}`}
+                      style={useGradient ? {
+                        background: 'linear-gradient(135deg, #16a34a 50%, #dc2626 50%)'
+                      } : {}}
                     >
                       {time}
                     </button>
@@ -1096,6 +1322,8 @@ export default function Dashboard() {
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-white/10 rounded border border-white/20"></span> Nedostupan</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-white rounded"></span> Slobodan</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-600 rounded"></span> Zakazan</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-500 rounded"></span> Rođendan</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{background: 'linear-gradient(135deg, #16a34a 50%, #dc2626 50%)'}}></span> Crna lista</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-500 rounded"></span> Prošao</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-600 rounded"></span> Nije došao</span>
               </div>
@@ -1782,6 +2010,32 @@ export default function Dashboard() {
                 <p className="text-lg font-medium">{selectedAppointment.customer_name}</p>
               </div>
               
+              {/* Birthday notice */}
+              {selectedAppointment.customer_birthday && (() => {
+                const birthday = new Date(selectedAppointment.customer_birthday);
+                const aptDate = new Date(selectedAppointment.appointment_date);
+                const isBirthday = birthday.getDate() === aptDate.getDate() && 
+                                   birthday.getMonth() === aptDate.getMonth();
+                return isBirthday ? (
+                  <div className="bg-blue-500/20 text-blue-400 p-3 rounded-lg text-center font-medium">
+                    🎂 Danas je klijentu rođendan!
+                  </div>
+                ) : null;
+              })()}
+              
+              {/* Blacklist warning */}
+              {selectedAppointment.customer_phone && (() => {
+                const blacklistEntry = blacklist.find(b => b.customer_phone === selectedAppointment.customer_phone);
+                return blacklistEntry ? (
+                  <div className="bg-red-500/20 text-red-400 p-3 rounded-lg">
+                    <p className="font-medium text-center mb-2">⚠️ KLIJENT NA CRNOJ LISTI</p>
+                    <p className="text-sm">Propustio termin: {blacklistEntry.missed_date ? new Date(blacklistEntry.missed_date).toLocaleDateString('sr-RS') : 'N/A'}</p>
+                    <p className="text-sm">Usluga: {blacklistEntry.missed_service_name || 'N/A'}</p>
+                    <p className="text-sm font-medium">Duguje: {blacklistEntry.missed_service_price?.toLocaleString() || 0} RSD</p>
+                  </div>
+                ) : null;
+              })()}
+              
               {selectedAppointment.customer_phone && (
                 <div>
                   <p className="text-white/40 text-xs">TELEFON</p>
@@ -1848,7 +2102,7 @@ export default function Dashboard() {
                 return new Date() >= aptDate;
               })() && (
                 <button
-                  onClick={() => markNoShow(selectedAppointment.id)}
+                  onClick={() => markNoShow(selectedAppointment.id, selectedAppointment)}
                   className="w-full py-3 rounded-lg bg-red-500/20 text-red-400 font-medium hover:bg-red-500/30 transition"
                 >
                   NIJE SE POJAVIO
