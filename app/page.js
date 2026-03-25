@@ -172,7 +172,7 @@ export default function Home() {
     const { data: barbers } = await supabase
       .from('barbers')
       .select('*')
-      .order('name')
+      .order('display_order')
 
     if (locations && barbers) {
       // Sort locations so Petra (Lokal 1) comes first
@@ -188,6 +188,7 @@ export default function Home() {
         const isLoc1 = loc.name.includes('Petra')
         const locationBarbers = barbers
           .filter(b => b.location_id === loc.id)
+          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
           .map(b => ({
             id: b.id,
             name: b.name,
@@ -520,11 +521,35 @@ export default function Home() {
   }
 
   const getTimeSlots = (barberId) => {
-    return availableSlots[barberId] || []
+    const slots = availableSlots[barberId] || []
+    
+    // If selected date is today, filter out past time slots
+    if (selectedDate) {
+      const today = new Date()
+      const selectedDateObj = new Date(selectedDate.iso)
+      
+      // Check if selected date is today
+      if (selectedDateObj.toDateString() === today.toDateString()) {
+        // Get current time in Serbia (CET/CEST - UTC+1 or UTC+2)
+        const serbiaTime = new Date(today.toLocaleString('en-US', { timeZone: 'Europe/Belgrade' }))
+        const currentHour = serbiaTime.getHours()
+        const currentMinute = serbiaTime.getMinutes()
+        const currentTimeInMinutes = currentHour * 60 + currentMinute
+        
+        // Filter out slots that have already started
+        return slots.filter(time => {
+          const [hours, minutes] = time.split(':').map(Number)
+          const slotTimeInMinutes = hours * 60 + minutes
+          return slotTimeInMinutes > currentTimeInMinutes
+        })
+      }
+    }
+    
+    return slots
   }
 
   const getBarberImage = (barber) => {
-    if (barber.image_url) return barber.image_url
+    // Always use local images from /public/barbers/
     return getBarberImageUrl(barber.slug)
   }
 
