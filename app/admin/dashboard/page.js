@@ -34,19 +34,12 @@ const formatDate = (date) => date.toISOString().split('T')[0];
 const getNext14Days = () => {
   const days = [];
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   
-  // Find the most recent Wednesday (or today if it's Wednesday)
-  // Sunday = 0, Monday = 1, Tuesday = 2, Wednesday = 3, etc.
-  const dayOfWeek = today.getDay();
-  const daysFromWednesday = dayOfWeek >= 3 ? dayOfWeek - 3 : dayOfWeek + 4;
-  
-  const startDate = new Date(today);
-  startDate.setDate(today.getDate() - daysFromWednesday);
-  
-  // Generate 14 days starting from that Wednesday
-  for (let i = 0; i < 14; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
+  // Generate 15 days starting from today (today + 14 days ahead)
+  for (let i = 0; i < 15; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
     days.push(date);
   }
   return days;
@@ -94,6 +87,7 @@ export default function Dashboard() {
   const [newBarberLocation, setNewBarberLocation] = useState('');
   const [editServicePrice, setEditServicePrice] = useState('');
   const [editServicePriceLocation2, setEditServicePriceLocation2] = useState('');
+  const [editServiceName, setEditServiceName] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imgErrors, setImgErrors] = useState({});
   
@@ -531,6 +525,21 @@ export default function Dashboard() {
   const bookSlotForBarber = async (targetBarber, time, customerData) => {
     const dateStr = formatDate(allAppointmentsDate);
     
+    // Check if appointment already exists for this slot
+    const { data: existing } = await supabase
+      .from('appointments')
+      .select('id, customer_name')
+      .eq('barber_id', targetBarber.id)
+      .eq('appointment_date', dateStr)
+      .eq('appointment_time', time + ':00')
+      .neq('status', 'cancelled')
+      .single();
+    
+    if (existing) {
+      alert(`Termin već zakazan za: ${existing.customer_name}`);
+      return false;
+    }
+    
     // Create appointment
     const { error } = await supabase
       .from('appointments')
@@ -549,6 +558,7 @@ export default function Dashboard() {
     
     if (error) {
       console.error('Error creating appointment:', error);
+      alert('Greška pri kreiranju termina');
       return false;
     }
     
@@ -744,6 +754,22 @@ export default function Dashboard() {
     setSaving(true);
     const dateStr = formatDate(selectedDate);
     
+    // Check if appointment already exists for this slot
+    const { data: existing } = await supabase
+      .from('appointments')
+      .select('id, customer_name')
+      .eq('barber_id', barber.id)
+      .eq('appointment_date', dateStr)
+      .eq('appointment_time', manualBookingSlot + ':00')
+      .neq('status', 'cancelled')
+      .single();
+    
+    if (existing) {
+      alert(`Termin već zakazan za: ${existing.customer_name}`);
+      setSaving(false);
+      return;
+    }
+    
     // Get selected service details
     const mainService = allServices.find(s => s.id === manualBookingForm.serviceId);
     const additionalService = manualBookingForm.additionalServiceId 
@@ -779,7 +805,7 @@ export default function Dashboard() {
     
     if (error) {
       console.error('Error creating appointment:', error);
-      alert('Greška pri kreiranju rezervacije: ' + error.message);
+      alert('Greška pri kreiranju rezervacije');
       setSaving(false);
       return;
     }
@@ -895,15 +921,29 @@ export default function Dashboard() {
     await supabase
       .from('services')
       .update({ 
+        name: editServiceName || editingService.name,
         price: price,
         price_location2: priceLocation2
       })
       .eq('id', editingService.id);
     
     setEditingService(null);
+    setEditServiceName('');
     setEditServicePrice('');
     setEditServicePriceLocation2('');
     loadServices();
+  };
+  
+  // Remove from blacklist
+  const removeFromBlacklist = async (phone) => {
+    await supabase
+      .from('blacklist')
+      .delete()
+      .eq('customer_phone', phone);
+    
+    // Reload blacklist
+    const { data } = await supabase.from('blacklist').select('*');
+    if (data) setBlacklist(data);
   };
 
   const addBarber = async () => {
@@ -1674,6 +1714,13 @@ export default function Dashboard() {
                     <p className="text-white/40 text-sm">Dodaj, izmeni ili obrisi berbere</p>
                   </div>
                 </button>
+                <button onClick={() => setAdminSection('blacklist')} className="w-full bg-white/5 p-8 rounded-lg flex items-center gap-4">
+                  <span className="text-4xl">🚫</span>
+                  <div className="text-left">
+                    <p className="text-lg font-medium">Crna lista</p>
+                    <p className="text-white/40 text-sm">Pregled i upravljanje crnom listom</p>
+                  </div>
+                </button>
               </div>
             ) : (
               <div>
@@ -1727,6 +1774,7 @@ export default function Dashboard() {
                           <button
                             onClick={() => { 
                               setEditingService(service); 
+                              setEditServiceName(service.name);
                               setEditServicePrice(service.price?.toString() || ''); 
                               setEditServicePriceLocation2(service.price_location2?.toString() || '');
                             }}
@@ -1977,6 +2025,45 @@ export default function Dashboard() {
                     )}
                   </div>
                 )}
+
+                {adminSection === 'blacklist' && (
+                  <div>
+                    <h2 className="text-white/40 text-xs tracking-wider mb-4">CRNA LISTA</h2>
+                    {blacklist.length === 0 ? (
+                      <p className="text-white/50 text-center py-8">Nema klijenata na crnoj listi</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {blacklist.map((item, index) => (
+                          <div key={index} className="bg-white/5 rounded-lg p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium text-white">{item.customer_name}</p>
+                                <p className="text-white/50 text-sm">{item.customer_phone}</p>
+                                <div className="mt-2 text-xs text-white/40">
+                                  <p>Propušteno: {item.missed_date}</p>
+                                  <p>Usluga: {item.missed_service_name}</p>
+                                  {item.missed_service_price && (
+                                    <p className="text-red-400">Dugovanje: {item.missed_service_price.toLocaleString()} RSD</p>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Ukloniti ${item.customer_name} sa crne liste?`)) {
+                                    removeFromBlacklist(item.customer_phone);
+                                  }
+                                }}
+                                className="bg-green-600/20 text-green-400 px-3 py-1 rounded text-sm"
+                              >
+                                Ukloni
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1986,7 +2073,17 @@ export default function Dashboard() {
       {editingService && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4">
           <div className="bg-neutral-900 w-full max-w-md rounded-t-2xl p-6">
-            <h3 className="text-lg font-medium mb-4">{editingService.name}</h3>
+            <h3 className="text-lg font-medium mb-4">Izmeni uslugu</h3>
+            <div className="mb-4">
+              <label className="block text-white/40 text-xs mb-2">NAZIV USLUGE</label>
+              <input
+                type="text"
+                value={editServiceName}
+                onChange={(e) => setEditServiceName(e.target.value)}
+                placeholder={editingService.name}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-lg"
+              />
+            </div>
             <div className="mb-4">
               <label className="block text-white/40 text-xs mb-2">CENA LOKAL I (RSD)</label>
               <input
@@ -2009,7 +2106,7 @@ export default function Dashboard() {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { setEditingService(null); setEditServicePrice(''); setEditServicePriceLocation2(''); }}
+                onClick={() => { setEditingService(null); setEditServiceName(''); setEditServicePrice(''); setEditServicePriceLocation2(''); }}
                 className="flex-1 bg-white/10 text-white py-3 rounded-lg"
               >
                 OTKAZI
