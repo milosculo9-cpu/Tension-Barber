@@ -29,17 +29,22 @@ const generateTimeSlots = (locationName, duration = 30) => {
 
 const DURATION_OPTIONS = [15, 20, 25, 30, 40, 45, 60];
 
-const formatDate = (date) => date.toISOString().split('T')[0];
+// Use local date components to avoid UTC timezone shift
+const formatDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const getNext14Days = () => {
   const days = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const now = new Date();
   
   // Generate 15 days starting from today (today + 14 days ahead)
   for (let i = 0; i < 15; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
+    // Use date constructor with local year/month/day to avoid timezone issues
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
     days.push(date);
   }
   return days;
