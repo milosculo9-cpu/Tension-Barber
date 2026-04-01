@@ -758,10 +758,15 @@ export default function Home() {
             {priceList.map((item) => (
               <div 
                 key={item.id} 
-                className="flex justify-between items-center py-4 border-b border-zinc-800"
+                className="flex justify-between items-start py-4 border-b border-zinc-800"
               >
-                <span className="text-sm md:text-base text-gray-300">{item.name.toUpperCase()}</span>
-                <span className="text-sm md:text-base text-white font-medium">
+                <div>
+                  <span className="text-sm md:text-base text-gray-300">{item.name.toUpperCase()}</span>
+                  {item.description && (
+                    <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                  )}
+                </div>
+                <span className="text-sm md:text-base text-white font-medium whitespace-nowrap ml-4">
                   {item.price ? `${item.price.toLocaleString()} RSD` : '***'}
                 </span>
               </div>
@@ -894,9 +899,10 @@ export default function Home() {
                   {priceList.filter(s => !s.is_additional).map((service) => {
                     const isLoc2 = selectedSalon?.name === 'Tension Barber II'
                     const displayPrice = getPriceForLocation(service, isLoc2)
+                    const desc = service.description ? ` ${service.description}` : ''
                     return (
                       <option key={service.id} value={service.id}>
-                        {service.name} {displayPrice ? `- ${displayPrice.toLocaleString()} RSD` : '- cena po dogovoru'}
+                        {service.name}{desc} {displayPrice ? `- ${displayPrice.toLocaleString()} RSD` : '- cena po dogovoru'}
                       </option>
                     )
                   })}
