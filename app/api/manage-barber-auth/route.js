@@ -123,11 +123,24 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Ne možete obrisati sopstveni nalog' }, { status: 400 });
       }
 
-      // 1) Login nalog: berber vise ne moze da se uloguje
+      // 1) Login nalog: berber vise ne moze da se uloguje.
+      //    Prvo se berber odveze od naloga (barbers.auth_user_id pokazuje na auth.users i blokira brisanje),
+      //    pa se tek onda brise sam nalog.
+      let warning = null;
       if (barber.auth_user_id) {
+        const { error: unlinkError } = await supabaseAdmin
+          .from('barbers')
+          .update({ auth_user_id: null })
+          .eq('id', barber.id);
+        if (unlinkError) {
+          return NextResponse.json({ error: `Odvezivanje naloga nije uspelo: ${unlinkError.message}` }, { status: 400 });
+        }
+
         const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(barber.auth_user_id);
         if (authDeleteError && !/not found/i.test(authDeleteError.message)) {
-          return NextResponse.json({ error: `Brisanje login naloga nije uspelo: ${authDeleteError.message}` }, { status: 400 });
+          // Berber je vec odvezan, pa ne moze da udje u panel; nalog ostaje za rucno brisanje u Supabase-u
+          console.error('Auth user delete failed:', barber.auth_user_id, authDeleteError.message);
+          warning = `Berber je uklonjen, ali login nalog nije obrisan (${authDeleteError.message}). Obrisati ga ručno u Supabase Auth.`;
         }
       }
 
@@ -154,7 +167,7 @@ export async function POST(request) {
         if (deactivateError) {
           return NextResponse.json({ error: deactivateError.message }, { status: 400 });
         }
-        return NextResponse.json({ success: true, mode: 'deactivated', appointments: appointmentCount });
+        return NextResponse.json({ success: true, mode: 'deactivated', appointments: appointmentCount, warning });
       }
 
       const { error: deleteError } = await supabaseAdmin
@@ -164,7 +177,7 @@ export async function POST(request) {
       if (deleteError) {
         return NextResponse.json({ error: deleteError.message }, { status: 400 });
       }
-      return NextResponse.json({ success: true, mode: 'deleted' });
+      return NextResponse.json({ success: true, mode: 'deleted', warning });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

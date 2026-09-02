@@ -1057,6 +1057,7 @@ export default function Dashboard() {
         alert(result.error || 'Brisanje nije uspelo');
         return;
       }
+      if (result.warning) alert(result.warning);
       setEditingBarber(null);
       loadAllBarbers();
     } catch (err) {
