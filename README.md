@@ -5,7 +5,8 @@ Moderna web aplikacija za zakazivanje termina u berbernici Tension Barber.
 ## Tech Stack
 
 - **Frontend:** Next.js 14, React, Tailwind CSS
-- **Backend:** Supabase (PostgreSQL, Auth, Storage)
+- **Backend:** Supabase (PostgreSQL, Auth)
+- **Slike:** Cloudinary (cloud `dqa59xeqg`, folder `tension-barber`, unsigned preset `tension_barber`); admin dodaje slike berbera direktno iz panela, vidi `lib/cloudinary.js`
 - **Hosting:** Vercel
 
 ## Setup

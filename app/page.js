@@ -2,11 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { cldUrl, optimizeImageUrl, TRANSFORMS } from '@/lib/cloudinary'
 
-// Local image paths (Vercel CDN)
-const getLogoUrl = (variant) => `/logo/logo.${variant}.PNG`
-const getBarberImageUrl = (slug) => `/barbers/${slug}.jpeg`
-const getBackgroundImageUrl = (img) => `/backgrounds/${img}`
+// Slike se serviraju sa Cloudinary-ja (folder tension-barber), optimizovane po velicini i formatu
+const stripExt = (file) => file.replace(/\.[a-z0-9]+$/i, '')
+const getLogoUrl = (variant) => cldUrl(`logo/logo.${variant}`, TRANSFORMS.logo)
+const getBarberImageUrl = (slug) => cldUrl(`barbers/${slug}`, TRANSFORMS.barber)
+const getBackgroundImageUrl = (img) =>
+  cldUrl(`backgrounds/${stripExt(img)}`, img.startsWith('mobile/') ? TRANSFORMS.backgroundMobile : TRANSFORMS.background)
+const getShopImageUrl = (img) => cldUrl(`shops/${stripExt(img)}`, TRANSFORMS.shop)
 
 // Desktop hero images
 const DESKTOP_HERO_IMAGES = [
@@ -530,7 +534,9 @@ export default function Home() {
   }
 
   const getBarberImage = (barber) => {
-    // Always use local images from /public/barbers/
+    // Slika koju je admin postavio (image_url u bazi) ima prednost,
+    // inace slika po slugu iz pocetnog seta na Cloudinary-ju
+    if (barber.image_url) return optimizeImageUrl(barber.image_url, TRANSFORMS.barber)
     return getBarberImageUrl(barber.slug)
   }
 
@@ -617,7 +623,7 @@ export default function Home() {
               >
                 <div className="aspect-[16/10] w-full">
                   <img 
-                    src={`/shops/${salon.image}`}
+                    src={getShopImageUrl(salon.image)}
                     alt={salon.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />

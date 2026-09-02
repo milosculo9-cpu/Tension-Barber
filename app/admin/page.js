@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { cldUrl, TRANSFORMS } from '@/lib/cloudinary';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 
@@ -100,7 +101,7 @@ export default function AdminLogin() {
           className={`fixed inset-0 bg-black z-50 flex flex-col items-center justify-center transition-transform duration-500 ${!preloading ? '-translate-y-full' : 'translate-y-0'}`}
         >
           <img
-            src="https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public/logo/logo.white.PNG"
+            src={cldUrl('logo/logo.white', TRANSFORMS.logo)}
             alt="Tension Barber"
             className="h-48 mb-8"
           />

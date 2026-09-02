@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
-
-const STORAGE_URL = 'https://ygczcwuwmxhnbbfipfby.supabase.co/storage/v1/object/public';
+import { uploadImage, optimizeImageUrl, TRANSFORMS } from '@/lib/cloudinary';
 
 const generateTimeSlots = (locationName, duration = 30) => {
   const slots = [];
@@ -977,27 +976,17 @@ export default function Dashboard() {
         return;
       }
       
-      // If image was selected, upload it
+      // Ako je izabrana slika, salje se na Cloudinary i link se upisuje u bazu
       if (newBarberImage && result.barber?.id) {
-        const fileExt = newBarberImage.name.split('.').pop().toLowerCase();
-        const fileName = `${newBarberName.toLowerCase()
-          .replace(/đ/g, 'dj')
-          .replace(/č/g, 'c')
-          .replace(/ć/g, 'c')
-          .replace(/š/g, 's')
-          .replace(/ž/g, 'z')
-          .replace(/[^a-z]/g, '')}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('barbers')
-          .upload(fileName, newBarberImage, { upsert: true });
-        
-        if (!uploadError) {
-          const imageUrl = `${STORAGE_URL}/barbers/${fileName}`;
-          await supabase
+        try {
+          const { url } = await uploadImage(newBarberImage, { folder: 'barbers', name: newBarberName });
+          const { error: updateError } = await supabase
             .from('barbers')
-            .update({ image_url: imageUrl })
+            .update({ image_url: url })
             .eq('id', result.barber.id);
+          if (updateError) throw updateError;
+        } catch (err) {
+          alert(`Berber je kreiran, ali slika nije sačuvana: ${err.message}. Otvori berbera i dodaj sliku ponovo.`);
         }
       }
       
@@ -1080,33 +1069,24 @@ export default function Dashboard() {
     if (!file || !editingBarber) return;
     
     setUploadingImage(true);
-    
-    const fileExt = file.name.split('.').pop().toLowerCase();
-    const fileName = `${editingBarber.name.toLowerCase()
-      .replace(/đ/g, 'dj')
-      .replace(/č/g, 'c')
-      .replace(/ć/g, 'c')
-      .replace(/š/g, 's')
-      .replace(/ž/g, 'z')
-      .replace(/[^a-z]/g, '')}.${fileExt}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('barbers')
-      .upload(fileName, file, { upsert: true });
-    
-    if (!uploadError) {
-      const imageUrl = `${STORAGE_URL}/barbers/${fileName}`;
-      
-      await supabase
+
+    try {
+      const { url } = await uploadImage(file, { folder: 'barbers', name: editingBarber.name });
+      const { error: updateError } = await supabase
         .from('barbers')
-        .update({ image_url: imageUrl })
+        .update({ image_url: url })
         .eq('id', editingBarber.id);
-      
-      setEditingBarber({ ...editingBarber, image_url: imageUrl });
+      if (updateError) throw updateError;
+
+      setEditingBarber({ ...editingBarber, image_url: url });
+      setImgErrors(prev => ({ ...prev, [editingBarber.id]: false }));
       loadAllBarbers();
+    } catch (err) {
+      alert(`Slika nije sačuvana: ${err.message}`);
+    } finally {
+      e.target.value = '';
+      setUploadingImage(false);
     }
-    
-    setUploadingImage(false);
   };
 
   if (loading) {
@@ -1823,7 +1803,7 @@ export default function Dashboard() {
                           <div className="flex items-center gap-3">
                             {b.image_url && !imgErrors[b.id] ? (
                               <img 
-                                src={b.image_url} 
+                                src={optimizeImageUrl(b.image_url, TRANSFORMS.barberThumb)} 
                                 alt={b.name} 
                                 className="w-12 h-12 rounded-full object-cover"
                                 onError={() => setImgErrors(prev => ({...prev, [b.id]: true}))}
@@ -1945,7 +1925,7 @@ export default function Dashboard() {
                     <div className="flex flex-col items-center mb-6">
                       {editingBarber.image_url ? (
                         <img 
-                          src={editingBarber.image_url} 
+                          src={optimizeImageUrl(editingBarber.image_url, TRANSFORMS.barber)} 
                           alt={editingBarber.name} 
                           className="w-32 h-32 rounded-full object-cover mb-4 border-2 border-white/20"
                         />
