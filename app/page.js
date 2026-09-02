@@ -861,6 +861,17 @@ export default function Home() {
       {/* ==================== FOOTER ==================== */}
       <footer className="py-8 px-4 bg-black border-t border-zinc-900 text-center">
         <p className="text-zinc-600 text-xs">© {new Date().getFullYear()} TENSION BARBER. Sva prava zadržana.</p>
+        <p className="text-zinc-700 text-[11px] tracking-wider mt-3">
+          Powered by{' '}
+          <a
+            href="https://zenviqon.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-zinc-500 hover:text-white transition-colors"
+          >
+            ZENVIQON
+          </a>
+        </p>
       </footer>
 
       {/* ==================== BOOKING MODAL ==================== */}
