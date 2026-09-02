@@ -365,7 +365,8 @@ export default function Dashboard() {
   };
 
   const loadAllBarbers = async () => {
-    const { data } = await supabase.from('barbers').select('*, locations(name)').order('display_order');
+    // Deaktivirani berberi (bivsi radnici sa sacuvanom istorijom termina) se ne prikazuju
+    const { data } = await supabase.from('barbers').select('*, locations(name)').neq('is_active', false).order('display_order');
     if (data) setAllBarbers(data);
   };
 
@@ -1042,15 +1043,27 @@ export default function Dashboard() {
   };
 
   const deleteBarber = async (barberId) => {
-    if (!confirm('Obrisati ovog berbera?')) return;
-    
-    await supabase
-      .from('barbers')
-      .delete()
-      .eq('id', barberId);
-    
-    setEditingBarber(null);
-    loadAllBarbers();
+    if (!confirm('Obrisati ovog berbera? Njegov login nalog se briše, a istorija termina ostaje sačuvana.')) return;
+
+    setSavingAuth(true);
+    try {
+      const response = await fetch('/api/manage-barber-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', barberId })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        alert(result.error || 'Brisanje nije uspelo');
+        return;
+      }
+      setEditingBarber(null);
+      loadAllBarbers();
+    } catch (err) {
+      alert('Greška pri brisanju berbera');
+    } finally {
+      setSavingAuth(false);
+    }
   };
 
   const updateBarberName = async (newName) => {
