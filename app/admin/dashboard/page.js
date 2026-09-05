@@ -106,6 +106,7 @@ export default function Dashboard() {
   const [editingBarberEmail, setEditingBarberEmail] = useState('');
   const [editingBarberPassword, setEditingBarberPassword] = useState('');
   const [savingAuth, setSavingAuth] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
   
   // Blocked slot without appointment
   const [blockedSlotTime, setBlockedSlotTime] = useState(null);
@@ -1067,6 +1068,25 @@ export default function Dashboard() {
     }
   };
 
+  const updateBarberLocation = async (locationId) => {
+    if (!editingBarber || !locationId || locationId === editingBarber.location_id) return;
+
+    setSavingLocation(true);
+    const { error } = await supabase
+      .from('barbers')
+      .update({ location_id: locationId })
+      .eq('id', editingBarber.id);
+    setSavingLocation(false);
+
+    if (error) {
+      alert(`Promena lokala nije uspela: ${error.message}`);
+      return;
+    }
+    const loc = locations.find(l => l.id === locationId);
+    setEditingBarber({ ...editingBarber, location_id: locationId, locations: loc ? { name: loc.name } : editingBarber.locations });
+    loadAllBarbers();
+  };
+
   const updateBarberName = async (newName) => {
     if (!editingBarber || !newName) return;
     
@@ -1977,7 +1997,17 @@ export default function Dashboard() {
 
                     <div className="mb-6">
                       <label className="block text-white/40 text-xs mb-2">LOKACIJA</label>
-                      <p className="text-white/50 bg-white/5 rounded-lg px-4 py-3">{editingBarber.locations?.name}</p>
+                      <select
+                        value={editingBarber.location_id || ''}
+                        onChange={(e) => updateBarberLocation(e.target.value)}
+                        disabled={savingLocation}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white disabled:opacity-50"
+                      >
+                        {locations.map(loc => (
+                          <option key={loc.id} value={loc.id} className="bg-black">{loc.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-white/30 text-xs mt-1">{savingLocation ? 'Čuvanje...' : 'Promena lokala se odmah vidi na sajtu'}</p>
                     </div>
 
                     {/* Login credentials section */}
