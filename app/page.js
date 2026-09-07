@@ -136,9 +136,30 @@ export default function Home() {
     return () => mediaQuery.removeEventListener('change', handler)
   }, [])
 
-  // Load salons and barbers from database on mount
+  // Load salons and barbers from database on mount, then keep them fresh:
+  // realtime on barbers/locations, plus a poll fallback and refresh when the tab comes back
   useEffect(() => {
     loadSalonsAndBarbers()
+
+    const channel = supabase
+      .channel('barbers-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'barbers' }, () => {
+        loadSalonsAndBarbers()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'locations' }, () => {
+        loadSalonsAndBarbers()
+      })
+      .subscribe()
+
+    const poll = setInterval(loadSalonsAndBarbers, 60000)
+    const onVisible = () => { if (document.visibilityState === 'visible') loadSalonsAndBarbers() }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   const loadSalonsAndBarbers = async () => {
@@ -194,6 +215,15 @@ export default function Home() {
       })
 
       setSalons(salonsData)
+
+      // Ako posetilac vec gleda salon, osvezi mu listu berbera bez ponovnog izbora salona
+      setSelectedSalon(prev => {
+        if (!prev) return prev
+        const fresh = salonsData.find(s => s.id === prev.id)
+        if (!fresh) return null
+        setSelectedBarber(pb => (pb && !fresh.barbers.some(b => b.id === pb.id)) ? null : pb)
+        return fresh
+      })
     }
   }
 

@@ -107,6 +107,7 @@ export default function Dashboard() {
   const [editingBarberPassword, setEditingBarberPassword] = useState('');
   const [savingAuth, setSavingAuth] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
+  const [movingBarberId, setMovingBarberId] = useState(null);
   
   // Blocked slot without appointment
   const [blockedSlotTime, setBlockedSlotTime] = useState(null);
@@ -1068,6 +1069,27 @@ export default function Dashboard() {
     }
   };
 
+  const shortLocationName = (loc) => (loc?.name?.includes('Petra') ? 'Lokal I' : 'Lokal II');
+
+  const moveBarberToOtherLocation = async (b) => {
+    const target = locations.find(l => l.id !== b.location_id);
+    if (!target) return;
+    if (!confirm(`Prebaciti ${b.name} u ${shortLocationName(target)}?`)) return;
+
+    setMovingBarberId(b.id);
+    const { error } = await supabase
+      .from('barbers')
+      .update({ location_id: target.id })
+      .eq('id', b.id);
+    setMovingBarberId(null);
+
+    if (error) {
+      alert(`Prebacivanje nije uspelo: ${error.message}`);
+      return;
+    }
+    loadAllBarbers();
+  };
+
   const updateBarberLocation = async (locationId) => {
     if (!editingBarber || !locationId || locationId === editingBarber.location_id) return;
 
@@ -1829,12 +1851,14 @@ export default function Dashboard() {
                     </div>
                     <div className="space-y-2">
                       {allBarbers.map(b => (
-                        <button
+                        <div
                           key={b.id}
-                          onClick={() => setEditingBarber(b)}
-                          className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center"
+                          className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center gap-3"
                         >
-                          <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setEditingBarber(b)}
+                            className="flex items-center gap-3 flex-1 text-left"
+                          >
                             {b.image_url && !imgErrors[b.id] ? (
                               <img 
                                 src={optimizeImageUrl(b.image_url, TRANSFORMS.barberThumb)} 
@@ -1852,8 +1876,19 @@ export default function Dashboard() {
                               {b.is_admin && <span className="text-xs text-white/30 ml-2">ADMIN</span>}
                               <p className="text-white/30 text-sm">{b.locations?.name}</p>
                             </div>
-                          </div>
-                        </button>
+                          </button>
+                          {locations.length > 1 && (
+                            <button
+                              onClick={() => moveBarberToOtherLocation(b)}
+                              disabled={movingBarberId === b.id}
+                              className="shrink-0 text-[11px] tracking-wider border border-white/20 text-white/60 px-3 py-2 rounded-lg disabled:opacity-50"
+                            >
+                              {movingBarberId === b.id
+                                ? '...'
+                                : `→ ${shortLocationName(locations.find(l => l.id !== b.location_id)).toUpperCase()}`}
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
