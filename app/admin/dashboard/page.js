@@ -82,6 +82,7 @@ export default function Dashboard() {
   // Service management
   const [newServiceName, setNewServiceName] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('');
+  const [newServicePriceLocation2, setNewServicePriceLocation2] = useState('');
   const [showAddService, setShowAddService] = useState(false);
   
   const [editingService, setEditingService] = useState(null);
@@ -846,17 +847,26 @@ export default function Dashboard() {
     if (!newServiceName.trim()) return;
     
     const price = newServicePrice ? parseInt(newServicePrice) : null;
-    
-    await supabase
+    // Ako cena za Lokal II nije uneta, vazi ista cena kao za Lokal I
+    const priceLocation2 = newServicePriceLocation2 ? parseInt(newServicePriceLocation2) : price;
+
+    const { error } = await supabase
       .from('services')
       .insert({
         name: newServiceName.trim(),
         price: price,
+        price_location2: priceLocation2,
         display_order: services.length + 1
       });
-    
+
+    if (error) {
+      alert(`Dodavanje usluge nije uspelo: ${error.message}`);
+      return;
+    }
+
     setNewServiceName('');
     setNewServicePrice('');
+    setNewServicePriceLocation2('');
     setShowAddService(false);
     
     // Reload services
@@ -925,7 +935,7 @@ export default function Dashboard() {
     const price = editServicePrice ? parseInt(editServicePrice) : null;
     const priceLocation2 = editServicePriceLocation2 ? parseInt(editServicePriceLocation2) : null;
     
-    await supabase
+    const { error } = await supabase
       .from('services')
       .update({ 
         name: editServiceName || editingService.name,
@@ -933,6 +943,11 @@ export default function Dashboard() {
         price_location2: priceLocation2
       })
       .eq('id', editingService.id);
+
+    if (error) {
+      alert(`Čuvanje cene nije uspelo: ${error.message}`);
+      return;
+    }
     
     setEditingService(null);
     setEditServiceName('');
@@ -1788,13 +1803,26 @@ export default function Dashboard() {
                           className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
                           placeholder="Naziv usluge"
                         />
-                        <input
-                          type="number"
-                          value={newServicePrice}
-                          onChange={(e) => setNewServicePrice(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
-                          placeholder="Cena (ostaviti prazno za 'po dogovoru')"
-                        />
+                        <div>
+                          <label className="block text-white/40 text-xs mb-1">CENA LOKAL I (RSD)</label>
+                          <input
+                            type="number"
+                            value={newServicePrice}
+                            onChange={(e) => setNewServicePrice(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                            placeholder="Ostaviti prazno za 'po dogovoru'"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-white/40 text-xs mb-1">CENA LOKAL II (RSD)</label>
+                          <input
+                            type="number"
+                            value={newServicePriceLocation2}
+                            onChange={(e) => setNewServicePriceLocation2(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                            placeholder="Prazno = ista cena kao Lokal I"
+                          />
+                        </div>
                         <div className="flex gap-2">
                           <button onClick={() => setShowAddService(false)} className="flex-1 py-2 rounded bg-white/10 text-white text-sm">
                             Otkaži
