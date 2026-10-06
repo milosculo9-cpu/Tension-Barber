@@ -1905,10 +1905,10 @@ export default function Dashboard() {
                             <div className="text-left">
                               <span className="font-medium">{b.name}</span>
                               {b.is_admin && <span className="text-xs text-white/30 ml-2">ADMIN</span>}
-                              <p className="text-white/30 text-sm">{b.locations?.name}</p>
+                              <p className="text-white/30 text-sm">{b.location_id ? b.locations?.name : 'Pult'}</p>
                             </div>
                           </button>
-                          {locations.length > 1 && (
+                          {locations.length > 1 && b.location_id && (
                             <button
                               onClick={() => moveBarberToOtherLocation(b)}
                               disabled={movingBarberId === b.id}
