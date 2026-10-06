@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [locations, setLocations] = useState([]);
   const [slotsLocked, setSlotsLocked] = useState(false);
   const [newAppointmentAlert, setNewAppointmentAlert] = useState(null);
+  const [allViewRefresh, setAllViewRefresh] = useState(0);
   const [showPastAppointments, setShowPastAppointments] = useState(null); // 'today' | 'total' | null
   const [pastAppointments, setPastAppointments] = useState([]);
   const [slotDuration, setSlotDuration] = useState(30); // default 30 minutes
@@ -113,7 +114,7 @@ export default function Dashboard() {
   // Blocked slot without appointment
   const [blockedSlotTime, setBlockedSlotTime] = useState(null);
   
-  // All appointments view (for Crni, Kole, Anđelo)
+  // All appointments view (admin, Kole, Anđelo)
   const [allAppointmentsData, setAllAppointmentsData] = useState([]);
   const [allAppointmentsDate, setAllAppointmentsDate] = useState(new Date());
   const [selectedBarberFilter, setSelectedBarberFilter] = useState('all');
@@ -128,12 +129,14 @@ export default function Dashboard() {
   const supabase = createClientComponentClient();
   const days = getNext14Days();
 
-  // IDs of barbers who can see all appointments (Crni, Kole, Anđelo)
-  const canSeeAllAppointments = [
-    '4112f49c-3106-412a-a1a4-4b41a758a943', // Crni
+  // Berberi koji vide sve termine iako nisu admin (Kole, Anđelo). Admin uvek vidi sve.
+  const ALL_VIEW_BARBER_IDS = [
     'c39c8070-1e50-43f4-a97a-a8f5d30f7690', // Kole
     '891bb22f-8377-4dc7-b14a-c7544aee6276'  // Anđelo
   ];
+  const canSeeAll = (b) => !!b && (b.is_admin || ALL_VIEW_BARBER_IDS.includes(b.id));
+  // Nalog za pult: admin bez lokala, nije berber pa nema svoje termine
+  const isDeskAccount = (b) => !!b?.is_admin && !b?.location_id;
 
   const tabs = [
     { id: 'svi-termini', label: 'Svi Termini' },
@@ -142,6 +145,14 @@ export default function Dashboard() {
     { id: 'statistika', label: 'Statistika' },
     { id: 'podesavanja', label: 'Podesavanja' }
   ];
+  const PERSONAL_TABS = ['termini', 'rezervacije', 'statistika'];
+
+  const getAvailableTabs = (b) => tabs.filter(t => {
+    if (t.id === 'podesavanja') return !!b?.is_admin;
+    if (t.id === 'svi-termini') return canSeeAll(b);
+    if (PERSONAL_TABS.includes(t.id)) return !isDeskAccount(b);
+    return true;
+  });
 
   // Change tab and scroll to top
   const changeTab = (tabId) => {
@@ -178,7 +189,7 @@ export default function Dashboard() {
       
       // Only trigger if horizontal movement is dominant and significant
       if (Math.abs(diffX) > Math.abs(diffY) * 2.5 && Math.abs(diffX) > 80) {
-        const availableTabs = barber?.is_admin ? tabs : tabs.filter(t => t.id !== 'podesavanja');
+        const availableTabs = getAvailableTabs(barber);
         const currentIndex = availableTabs.findIndex(t => t.id === activeTab);
         
         if (diffX > 0 && currentIndex < availableTabs.length - 1) {
@@ -212,10 +223,10 @@ export default function Dashboard() {
 
   // Load all appointments when viewing 'svi-termini' tab
   useEffect(() => {
-    if (barber && activeTab === 'svi-termini' && canSeeAllAppointments.includes(barber.id)) {
+    if (barber && activeTab === 'svi-termini' && canSeeAll(barber)) {
       loadAllAppointments(allAppointmentsDate);
     }
-  }, [allAppointmentsDate, activeTab, barber]);
+  }, [allAppointmentsDate, activeTab, barber, allViewRefresh]);
 
   // Load slots locked state from database
   const loadSlotsLockedState = async () => {
@@ -260,11 +271,13 @@ export default function Dashboard() {
           event: 'INSERT',
           schema: 'public',
           table: 'appointments',
-          filter: `barber_id=eq.${barber.id}`
+          // Pult prati rezervacije svih berbera, berber samo svoje
+          ...(isDeskAccount(barber) ? {} : { filter: `barber_id=eq.${barber.id}` })
         },
         (payload) => {
           console.log('New appointment:', payload);
           setNewAppointmentAlert(payload.new);
+          if (isDeskAccount(barber)) setAllViewRefresh(n => n + 1);
           loadAppointments();
           loadStats(barber.id);
           loadSlotsForDate(); // Reload slots to show booked
@@ -277,9 +290,10 @@ export default function Dashboard() {
           event: 'UPDATE',
           schema: 'public',
           table: 'appointments',
-          filter: `barber_id=eq.${barber.id}`
+          ...(isDeskAccount(barber) ? {} : { filter: `barber_id=eq.${barber.id}` })
         },
         () => {
+          if (isDeskAccount(barber)) setAllViewRefresh(n => n + 1);
           loadAppointments();
           loadStats(barber.id);
         }
@@ -328,18 +342,13 @@ export default function Dashboard() {
     }
 
     setBarber(barberData);
+    // Nalog za pult nema svoje termine, pa odmah otvara pregled svih berbera
+    if (isDeskAccount(barberData)) setActiveTab('svi-termini');
     await loadStats(barberData.id);
     await loadAllActiveServices(); // Load services for manual booking
     
-    // IDs of barbers who can see all appointments (Crni, Kole, Anđelo)
-    const canSeeAll = [
-      '4112f49c-3106-412a-a1a4-4b41a758a943', // Crni
-      'c39c8070-1e50-43f4-a97a-a8f5d30f7690', // Kole
-      '891bb22f-8377-4dc7-b14a-c7544aee6276'  // Anđelo
-    ];
-    
     // Load data for "Svi Termini" tab
-    if (canSeeAll.includes(barberData.id)) {
+    if (canSeeAll(barberData)) {
       loadAllBarbers();
       loadLocations();
     }
@@ -486,7 +495,7 @@ export default function Dashboard() {
     }
   };
 
-  // Load all appointments for all barbers (for Crni, Kole, Anđelo view)
+  // Load all appointments for all barbers (admin, Kole, Anđelo view)
   const loadAllAppointments = async (date) => {
     const dateStr = formatDate(date || allAppointmentsDate);
     
@@ -1171,14 +1180,7 @@ export default function Dashboard() {
   const timeSlots = generateTimeSlots(barber.locations?.name, slotDuration);
   
   // Determine which tabs to show based on barber permissions
-  const canViewAllTerms = canSeeAllAppointments.includes(barber?.id);
-  let availableTabs = tabs;
-  if (!barber?.is_admin) {
-    availableTabs = availableTabs.filter(t => t.id !== 'podesavanja');
-  }
-  if (!canViewAllTerms) {
-    availableTabs = availableTabs.filter(t => t.id !== 'svi-termini');
-  }
+  const availableTabs = getAvailableTabs(barber);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -1233,8 +1235,8 @@ export default function Dashboard() {
 
       <main className="p-4 pb-20 min-h-[60vh]">
         
-        {/* ALL APPOINTMENTS TAB - for Crni, Kole, Anđelo */}
-        {activeTab === 'svi-termini' && canSeeAllAppointments.includes(barber?.id) && (
+        {/* ALL APPOINTMENTS TAB - admin, Kole, Anđelo */}
+        {activeTab === 'svi-termini' && canSeeAll(barber) && (
           <div className="space-y-6">
             <section>
               <h2 className="text-white/40 text-xs tracking-wider mb-3">IZABERI DATUM</h2>
@@ -1290,6 +1292,7 @@ export default function Dashboard() {
               
               <div className="space-y-6">
                 {allBarbers
+                  .filter(b => b.location_id) // nalog za pult nije berber
                   .filter(b => selectedBarberFilter === 'all' || b.location_id === selectedBarberFilter)
                   .map(targetBarber => {
                     const barberData = allBarberSlots[targetBarber.id] || { available: [], booked: [], duration: 30 };

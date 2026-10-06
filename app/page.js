@@ -188,7 +188,7 @@ export default function Home() {
       const salonsData = sortedLocations.map(loc => {
         const isLoc1 = loc.name.includes('Petra')
         const locationBarbers = barbers
-          .filter(b => b.location_id === loc.id)
+          .filter(b => b.location_id === loc.id && b.is_active !== false)
           .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
           .map(b => ({
             id: b.id,
