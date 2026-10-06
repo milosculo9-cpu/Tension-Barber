@@ -42,12 +42,24 @@ export default function AdminLogin() {
       }
     };
 
+    // Na racunaru nema prevlacenja: dovoljan je tocak misa ili taster
+    const handleWheel = (e) => {
+      if (e.deltaY > 0) handleSwipeUp();
+    };
+    const handleKeyDown = (e) => {
+      if (['Enter', ' ', 'ArrowUp', 'ArrowDown', 'PageDown'].includes(e.key)) handleSwipeUp();
+    };
+
     document.addEventListener('touchstart', handleTouchStart);
     document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('wheel', handleWheel);
+    document.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.removeEventListener('touchstart', handleTouchStart);
       document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('wheel', handleWheel);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [showSwipe, preloading]);
 
@@ -98,7 +110,8 @@ export default function AdminLogin() {
       
       {preloading && (
         <div 
-          className={`fixed inset-0 bg-black z-50 flex flex-col items-center justify-center transition-transform duration-500 ${!preloading ? '-translate-y-full' : 'translate-y-0'}`}
+          onClick={() => showSwipe && handleSwipeUp()}
+          className={`fixed inset-0 bg-black z-50 flex flex-col items-center justify-center transition-transform duration-500 cursor-pointer ${!preloading ? '-translate-y-full' : 'translate-y-0'}`}
         >
           <img
             src={cldUrl('logo/logo.white', TRANSFORMS.logo)}
@@ -111,7 +124,7 @@ export default function AdminLogin() {
               <svg className="w-8 h-8 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
-              <span className="text-sm mt-2">Prevuci na gore</span>
+              <span className="text-sm mt-2">Prevuci na gore ili klikni</span>
             </div>
           )}
         </div>
