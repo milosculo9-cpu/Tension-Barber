@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import { uploadImage, optimizeImageUrl, TRANSFORMS } from '@/lib/cloudinary';
+import Evidencija from './Evidencija';
 
 const generateTimeSlots = (locationName, duration = 30) => {
   const slots = [];
@@ -143,6 +144,7 @@ export default function Dashboard() {
     { id: 'termini', label: 'Termini' },
     { id: 'rezervacije', label: 'Rezervacije' },
     { id: 'statistika', label: 'Statistika' },
+    { id: 'evidencija', label: 'Evidencija' },
     { id: 'podesavanja', label: 'Podesavanja' }
   ];
   const PERSONAL_TABS = ['termini', 'rezervacije', 'statistika'];
@@ -523,12 +525,14 @@ export default function Dashboard() {
       .select('*')
       .eq('slot_date', dateStr);
     
-    // Organize by barber
+    // Organize by barber. Grupise se po barber_id iz samih slotova, a ne preko allBarbers,
+    // jer spisak berbera mozda jos nije ucitan kad se ovo prvi put pozove.
     const slotsByBarber = {};
-    allBarbers.forEach(b => {
-      const barberSlots = allSlots?.filter(s => s.barber_id === b.id) || [];
-      const barberDuration = allDurations?.find(d => d.barber_id === b.id)?.slot_duration || 30;
-      slotsByBarber[b.id] = {
+    const barberIds = new Set([...(allSlots || []), ...(allDurations || [])].map(s => s.barber_id));
+    barberIds.forEach(barberId => {
+      const barberSlots = allSlots?.filter(s => s.barber_id === barberId) || [];
+      const barberDuration = allDurations?.find(d => d.barber_id === barberId)?.slot_duration || 30;
+      slotsByBarber[barberId] = {
         available: barberSlots.filter(s => !s.is_booked).map(s => s.slot_time.slice(0, 5)),
         booked: barberSlots.filter(s => s.is_booked).map(s => s.slot_time.slice(0, 5)),
         duration: barberDuration
@@ -1753,6 +1757,10 @@ export default function Dashboard() {
               <p className="text-white/30 text-sm">RSD</p>
             </div>
           </div>
+        )}
+
+        {activeTab === 'evidencija' && (
+          <Evidencija supabase={supabase} barber={barber} locations={locations} />
         )}
 
         {activeTab === 'podesavanja' && barber.is_admin && (
