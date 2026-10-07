@@ -88,6 +88,7 @@ const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AVG', 'SEP
 export default function Dashboard() {
   const [barber, setBarber] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadStuck, setLoadStuck] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [availableSlots, setAvailableSlots] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -245,7 +246,13 @@ export default function Dashboard() {
   }, [activeTab, barber]);
 
   useEffect(() => {
-    loadBarberData();
+    loadBarberData().catch(err => {
+      console.error('Ucitavanje panela nije uspelo:', err);
+      setLoadStuck(true);
+    });
+    // Ako se panel ne ucita za 10 sekundi, nudi se ponovna prijava umesto beskonacnog cekanja
+    const timer = setTimeout(() => setLoadStuck(true), 10000);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -357,11 +364,29 @@ export default function Dashboard() {
     };
   }, [barber, selectedDate]);
 
+  // Kad pregledac ne moze da procita prijavu, a server je vidi, router.push('/admin') bi
+  // vratio nazad na panel i panel bi ostao na "Ucitavanje". Zato se prijava cisti i ide se
+  // na formu punim ucitavanjem stranice.
+  const backToLogin = async () => {
+    try { await supabase.auth.signOut(); } catch (e) { /* prijava je vec nevazeca */ }
+    window.location.replace('/admin');
+  };
+
   const loadBarberData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    let user = null;
+    try {
+      const { data } = await supabase.auth.getUser();
+      user = data?.user || null;
+      if (!user) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        user = sessionData?.session?.user || null;
+      }
+    } catch (err) {
+      console.error('Provera prijave nije uspela:', err);
+    }
+
     if (!user) {
-      router.push('/admin');
+      await backToLogin();
       return;
     }
 
@@ -372,7 +397,7 @@ export default function Dashboard() {
       .single();
 
     if (error || !barberData) {
-      router.push('/admin');
+      await backToLogin();
       return;
     }
 
@@ -1243,8 +1268,21 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6 p-6 text-center">
         <div className="text-white text-xl">Ucitavanje...</div>
+        {loadStuck && (
+          <>
+            <p className="text-white/50 text-sm max-w-xs">Panel se učitava duže nego obično.</p>
+            <div className="flex gap-3">
+              <button onClick={() => window.location.reload()} className="px-5 py-3 rounded-lg bg-white/10 text-white text-sm">
+                Pokušaj ponovo
+              </button>
+              <button onClick={backToLogin} className="px-5 py-3 rounded-lg bg-white text-black text-sm font-medium">
+                Prijavi se ponovo
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   }
