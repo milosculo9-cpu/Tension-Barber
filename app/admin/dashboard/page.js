@@ -782,10 +782,17 @@ export default function Dashboard() {
     refreshAfterChange();
   };
 
-  // Pomeranje termina na slobodno mesto istog dana, kod istog ili drugog berbera
+  // Lokal berbera kod kog je termin; pomera se samo u okviru istog lokala
+  const aptLocationId = (apt) => allBarbers.find(b => b.id === apt?.barber_id)?.location_id;
+
+  // Pomeranje termina na slobodno mesto istog dana, kod istog ili drugog berbera u istom lokalu
   const moveAppointment = async (apt, targetBarber, time) => {
     const sameSpot = apt.barber_id === targetBarber.id && apt.appointment_time?.slice(0, 5) === time;
     if (sameSpot) return;
+    if (targetBarber.location_id !== aptLocationId(apt)) {
+      alert('Termin može da se pomeri samo kod berbera u istom lokalu.');
+      return;
+    }
     const from = `${apt.appointment_time?.slice(0, 5)}`;
     const toWho = targetBarber.id === apt.barber_id ? '' : ` kod berbera ${targetBarber.name}`;
     if (!confirm(`Pomeriti termin za ${apt.customer_name} sa ${from} na ${time}${toWho}?`)) return;
@@ -850,7 +857,8 @@ export default function Dashboard() {
         else return;
       }
       const el = slotAt(st.x, st.y);
-      st.overKey = el && el.dataset.free === '1' ? el.dataset.slot : null;
+      const srcLoc = allBarbers.find(b => b.id === st.apt.barber_id)?.location_id;
+      st.overKey = el && el.dataset.free === '1' && el.dataset.loc === String(srcLoc) ? el.dataset.slot : null;
       setDrag({ ...st });
     };
 
@@ -1476,7 +1484,7 @@ export default function Dashboard() {
               <div className="sticky top-2 z-30 bg-blue-600 text-white rounded-lg p-3 flex items-center justify-between gap-3 shadow-xl">
                 <p className="text-sm">
                   Pomeranje: <b>{moveMode.customer_name}</b> ({moveMode.appointment_time?.slice(0, 5)}).
-                  Kliknite na slobodan (beli) termin.
+                  Kliknite na slobodan (beli) termin u istom lokalu.
                 </p>
                 <button onClick={() => setMoveMode(null)} className="shrink-0 px-3 py-1.5 rounded bg-white/20 text-sm">Odustani</button>
               </div>
@@ -1491,7 +1499,7 @@ export default function Dashboard() {
             )}
             {barber?.is_admin && (
               <p className="text-white/30 text-xs">
-                Termin se pomera prevlačenjem na slobodan (beli) termin. Na telefonu: zadržite prst na terminu, pa prevucite.
+                Termin se pomera prevlačenjem na slobodan (beli) termin u istom lokalu. Na telefonu: zadržite prst na terminu, pa prevucite.
               </p>
             )}
             <section>
@@ -1613,13 +1621,15 @@ export default function Dashboard() {
                             const canDrag = barber?.is_admin && slotAppointment && !slotAppointment.no_show;
                             const isDragSource = drag?.active && drag.apt.id === slotAppointment?.id;
                             const isDropTarget = drag?.active && drag.overKey === slotKey;
-                            const isMoveTarget = (drag?.active || moveMode) && isFree;
+                            const movingApt = drag?.active ? drag.apt : moveMode;
+                            const isMoveTarget = !!movingApt && isFree && targetBarber.location_id === aptLocationId(movingApt);
 
                             return (
                               <button
                                 key={time}
                                 data-slot={slotKey}
                                 data-free={isFree ? '1' : '0'}
+                                data-loc={targetBarber.location_id}
                                 onPointerDown={canDrag ? (e) => startDrag(e, slotAppointment) : undefined}
                                 onContextMenu={canDrag ? (e) => e.preventDefault() : undefined}
                                 onClick={() => {
