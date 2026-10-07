@@ -5,6 +5,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import { uploadImage, optimizeImageUrl, TRANSFORMS } from '@/lib/cloudinary';
 import Evidencija from './Evidencija';
+import Klijenti from './Klijenti';
 
 const generateTimeSlots = (locationName, duration = 30) => {
   const slots = [];
@@ -50,6 +51,37 @@ const getNext14Days = () => {
   return days;
 };
 
+// Rucno zakazivanje: ime i prezime su odvojena polja, telefon mora biti pravi broj
+const MIN_PHONE_DIGITS = 9;
+const phoneDigits = (p) => (p || '').replace(/\D/g, '');
+const fullName = (first, last) => `${(first || '').trim()} ${(last || '').trim()}`.trim();
+const salonAddress = (locationName) =>
+  locationName?.includes('Petra') ? 'Bulevar kralja Petra I 85' : 'Bulevar patrijarha Pavla 117';
+
+// Ista potvrda kao kad klijent sam zakaze preko sajta (sa linkom za otkazivanje)
+const sendBookingConfirmation = async ({ name, email, serviceName, servicePrice, barberName, locationName, date, time, token }) => {
+  if (!email) return;
+  try {
+    await fetch('/api/send-confirmation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: name,
+        customerEmail: email,
+        serviceName,
+        servicePrice,
+        barberName,
+        appointmentDate: date,
+        appointmentTime: time,
+        salonAddress: salonAddress(locationName),
+        cancellationToken: token
+      })
+    });
+  } catch (err) {
+    console.error('Email error:', err);
+  }
+};
+
 const dayNames = ['NED', 'PON', 'UTO', 'SRE', 'CET', 'PET', 'SUB'];
 const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AVG', 'SEP', 'OKT', 'NOV', 'DEC'];
 
@@ -78,7 +110,7 @@ export default function Dashboard() {
   // Manual booking form
   const [showManualBooking, setShowManualBooking] = useState(false);
   const [manualBookingSlot, setManualBookingSlot] = useState(null);
-  const [manualBookingForm, setManualBookingForm] = useState({ name: '', phone: '', serviceId: '', additionalServiceId: '' });
+  const [manualBookingForm, setManualBookingForm] = useState({ firstName: '', lastName: '', phone: '', email: '', serviceId: '', additionalServiceId: '' });
   const [allServices, setAllServices] = useState([]);
   
   // Service management
@@ -145,6 +177,7 @@ export default function Dashboard() {
     { id: 'rezervacije', label: 'Rezervacije' },
     { id: 'statistika', label: 'Statistika' },
     { id: 'evidencija', label: 'Evidencija' },
+    { id: 'klijenti', label: 'Klijenti' },
     { id: 'podesavanja', label: 'Podesavanja' }
   ];
   const PERSONAL_TABS = ['termini', 'rezervacije', 'statistika'];
@@ -562,12 +595,13 @@ export default function Dashboard() {
     }
     
     // Create appointment
-    const { error } = await supabase
+    const { data: created, error } = await supabase
       .from('appointments')
       .insert({
         barber_id: targetBarber.id,
         customer_name: customerData.name,
         customer_phone: customerData.phone,
+        customer_email: customerData.email || '',
         service_id: customerData.service_id,
         service_name: customerData.service_name,
         service_price: customerData.service_price,
@@ -575,7 +609,9 @@ export default function Dashboard() {
         appointment_time: time + ':00',
         status: 'confirmed',
         duration_minutes: customerData.duration || 30
-      });
+      })
+      .select('cancellation_token')
+      .single();
     
     if (error) {
       console.error('Error creating appointment:', error);
@@ -594,6 +630,18 @@ export default function Dashboard() {
       }, {
         onConflict: 'barber_id,slot_date,slot_time'
       });
+
+    await sendBookingConfirmation({
+      name: customerData.name,
+      email: customerData.email,
+      serviceName: customerData.service_name,
+      servicePrice: customerData.service_price,
+      barberName: targetBarber.name,
+      locationName: targetBarber.locations?.name,
+      date: dateStr,
+      time,
+      token: created?.cancellation_token
+    });
     
     // Reload
     loadAllAppointments(allAppointmentsDate);
@@ -770,7 +818,13 @@ export default function Dashboard() {
   // Manual booking by barber
   const handleManualBooking = async (e) => {
     e.preventDefault();
-    if (!manualBookingSlot || !manualBookingForm.name || !manualBookingForm.phone) return;
+    if (!manualBookingSlot || !manualBookingForm.firstName.trim() || !manualBookingForm.lastName.trim()) return;
+    if (phoneDigits(manualBookingForm.phone).length < MIN_PHONE_DIGITS) {
+      alert('Upišite pravi broj telefona klijenta (najmanje 9 cifara).');
+      return;
+    }
+    const customerName = fullName(manualBookingForm.firstName, manualBookingForm.lastName);
+    const customerEmail = manualBookingForm.email.trim();
     
     setSaving(true);
     const dateStr = formatDate(selectedDate);
@@ -809,20 +863,22 @@ export default function Dashboard() {
     }
     
     // Create appointment
-    const { error } = await supabase
+    const { data: created, error } = await supabase
       .from('appointments')
       .insert({
         barber_id: barber.id,
         service_name: serviceName,
         service_price: servicePrice,
-        customer_name: manualBookingForm.name,
-        customer_email: '',
-        customer_phone: manualBookingForm.phone,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        customer_phone: manualBookingForm.phone.trim(),
         appointment_date: dateStr,
         appointment_time: manualBookingSlot + ':00',
         duration_minutes: totalDuration,
         status: 'confirmed'
-      });
+      })
+      .select('cancellation_token')
+      .single();
     
     if (error) {
       console.error('Error creating appointment:', error);
@@ -842,11 +898,23 @@ export default function Dashboard() {
       }, {
         onConflict: 'barber_id,slot_date,slot_time'
       });
+
+    await sendBookingConfirmation({
+      name: customerName,
+      email: customerEmail,
+      serviceName,
+      servicePrice,
+      barberName: barber.name,
+      locationName: barber.locations?.name,
+      date: dateStr,
+      time: manualBookingSlot,
+      token: created?.cancellation_token
+    });
     
     // Reset form
     setShowManualBooking(false);
     setManualBookingSlot(null);
-    setManualBookingForm({ name: '', phone: '', serviceId: '', additionalServiceId: '' });
+    setManualBookingForm({ firstName: '', lastName: '', phone: '', email: '', serviceId: '', additionalServiceId: '' });
     
     // Reload data
     await loadSlotsForDate();
@@ -1416,9 +1484,14 @@ export default function Dashboard() {
                 const serviceSelect = form.service;
                 const selectedOption = serviceSelect.options[serviceSelect.selectedIndex];
                 
+                if (phoneDigits(form.phone.value).length < MIN_PHONE_DIGITS) {
+                  alert('Upišite pravi broj telefona klijenta (najmanje 9 cifara).');
+                  return;
+                }
                 const success = await bookSlotForBarber(selectedBarberForBooking, allViewManualBookingSlot, {
-                  name: form.name.value,
-                  phone: form.phone.value,
+                  name: fullName(form.firstName.value, form.lastName.value),
+                  phone: form.phone.value.trim(),
+                  email: form.email.value.trim(),
                   service_id: form.service.value,
                   service_name: selectedOption.dataset.name,
                   service_price: parseInt(selectedOption.dataset.price) || 0,
@@ -1431,13 +1504,23 @@ export default function Dashboard() {
                   setAllViewManualBookingSlot(null);
                 }
               }} className="p-4 space-y-4">
-                <div>
-                  <label className="text-white/40 text-xs block mb-1">IME KLIJENTA *</label>
-                  <input name="name" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-white/40 text-xs block mb-1">IME *</label>
+                    <input name="firstName" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
+                  </div>
+                  <div>
+                    <label className="text-white/40 text-xs block mb-1">PREZIME *</label>
+                    <input name="lastName" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
+                  </div>
                 </div>
                 <div>
                   <label className="text-white/40 text-xs block mb-1">TELEFON *</label>
-                  <input name="phone" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
+                  <input name="phone" type="tel" required placeholder="06x xxx xxxx" className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
+                </div>
+                <div>
+                  <label className="text-white/40 text-xs block mb-1">EMAIL (opciono, šalje se potvrda)</label>
+                  <input name="email" type="email" className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
                 </div>
                 <div>
                   <label className="text-white/40 text-xs block mb-1">USLUGA *</label>
@@ -1761,6 +1844,10 @@ export default function Dashboard() {
 
         {activeTab === 'evidencija' && (
           <Evidencija supabase={supabase} barber={barber} locations={locations} />
+        )}
+
+        {activeTab === 'klijenti' && (
+          <Klijenti supabase={supabase} barber={barber} />
         )}
 
         {activeTab === 'podesavanja' && barber.is_admin && (
@@ -2324,19 +2411,32 @@ export default function Dashboard() {
               </p>
             </div>
             <form onSubmit={handleManualBooking} className="p-4 space-y-4">
-              <div>
-                <label className="block text-white/50 text-xs mb-1">Ime klijenta</label>
-                <input
-                  type="text"
-                  value={manualBookingForm.name}
-                  onChange={(e) => setManualBookingForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
-                  placeholder="Ime i prezime"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-white/50 text-xs mb-1">Ime *</label>
+                  <input
+                    type="text"
+                    value={manualBookingForm.firstName}
+                    onChange={(e) => setManualBookingForm(prev => ({ ...prev, firstName: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                    placeholder="Ime"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-white/50 text-xs mb-1">Prezime *</label>
+                  <input
+                    type="text"
+                    value={manualBookingForm.lastName}
+                    onChange={(e) => setManualBookingForm(prev => ({ ...prev, lastName: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                    placeholder="Prezime"
+                    required
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-white/50 text-xs mb-1">Telefon</label>
+                <label className="block text-white/50 text-xs mb-1">Telefon *</label>
                 <input
                   type="tel"
                   value={manualBookingForm.phone}
@@ -2344,6 +2444,16 @@ export default function Dashboard() {
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
                   placeholder="06x xxx xxxx"
                   required
+                />
+              </div>
+              <div>
+                <label className="block text-white/50 text-xs mb-1">Email (opciono, šalje se potvrda)</label>
+                <input
+                  type="email"
+                  value={manualBookingForm.email}
+                  onChange={(e) => setManualBookingForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+                  placeholder="klijent@email.com"
                 />
               </div>
               <div>
@@ -2397,7 +2507,7 @@ export default function Dashboard() {
                   type="button"
                   onClick={() => {
                     setShowManualBooking(false);
-                    setManualBookingForm({ name: '', phone: '', serviceId: '', additionalServiceId: '' });
+                    setManualBookingForm({ firstName: '', lastName: '', phone: '', email: '', serviceId: '', additionalServiceId: '' });
                   }}
                   className="flex-1 py-3 rounded-lg bg-white/10 text-white"
                 >
