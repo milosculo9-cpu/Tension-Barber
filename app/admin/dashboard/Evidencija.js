@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { withTimeout } from '@/lib/timeout';
 
 // Evidencija klijenata: ko je dosao, ko nije, po danu, nedelji i mesecu.
 // Berber vidi samo svoje klijente, admin vidi sve berbere.
@@ -92,6 +93,8 @@ export default function Evidencija({ supabase, barber, locations = [] }) {
   const [anchor, setAnchor] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const requestRef = useRef(0);
   const [barberFilter, setBarberFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [busyId, setBusyId] = useState(null);
@@ -109,7 +112,10 @@ export default function Evidencija({ supabase, barber, locations = [] }) {
   const range = useMemo(() => getRange(period, anchor), [period, anchor]);
 
   const load = async () => {
+    // Odgovor za stariji period (ako se brzo klikce strelicama) ne sme da pregazi noviji
+    const requestId = ++requestRef.current;
     setLoading(true);
+    setLoadError('');
     const from = formatDate(range.from);
     const to = formatDate(range.to);
     // Supabase vraca najvise 1000 redova po upitu, pa se mesec za ceo salon cita u delovima
@@ -126,8 +132,16 @@ export default function Evidencija({ supabase, barber, locations = [] }) {
         .order('appointment_time', { ascending: true })
         .range(page * pageSize, page * pageSize + pageSize - 1);
       if (!isAdmin) query = query.eq('barber_id', barber.id);
-      const { data, error } = await query;
-      if (error) { console.error('Evidencija:', error.message); break; }
+      const { data, error } = await withTimeout(query);
+      if (requestId !== requestRef.current) return;
+      if (error) {
+        console.error('Evidencija:', error.message);
+        setLoadError(error.message === 'timeout'
+          ? 'Baza ne odgovara. Proverite internet i pokušajte ponovo.'
+          : 'Učitavanje nije uspelo.');
+        setLoading(false);
+        return;
+      }
       rows = rows.concat(data || []);
       if (!data || data.length < pageSize) break;
     }
@@ -136,8 +150,8 @@ export default function Evidencija({ supabase, barber, locations = [] }) {
   };
 
   useEffect(() => {
-    if (barber) load();
-  }, [barber, range.from.getTime(), range.to.getTime()]);
+    if (barber?.id) load();
+  }, [barber?.id, range.from.getTime(), range.to.getTime()]);
 
   const barbersById = useMemo(() => {
     const map = {};
@@ -331,7 +345,12 @@ export default function Evidencija({ supabase, barber, locations = [] }) {
         <h2 className="text-white/40 text-xs tracking-wider mb-2">
           SPISAK KLIJENATA{isAdmin && barberFilter !== 'all' ? ` · ${barbersById[barberFilter]?.name || ''}` : ''}
         </h2>
-        {loading ? (
+        {loadError ? (
+          <div className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+            <p className="text-red-300 text-sm">{loadError}</p>
+            <button onClick={load} className="shrink-0 px-3 py-1.5 rounded bg-white text-black text-sm">Pokušaj ponovo</button>
+          </div>
+        ) : loading ? (
           <p className="text-white/30 text-sm text-center py-8">Učitavanje...</p>
         ) : byDate.length === 0 ? (
           <p className="text-white/30 text-sm text-center py-8">Nema termina u ovom periodu</p>

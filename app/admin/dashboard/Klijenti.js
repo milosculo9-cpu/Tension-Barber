@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { withTimeout } from '@/lib/timeout';
 
 // Baza klijenata: koliko puta je ko dosao, otkazao i nije dosao, rangirano po dolascima.
 // Racuna se u bazi (get_clients): admin dobija ceo salon, berber samo svoje termine.
@@ -8,6 +9,10 @@ import { useState, useEffect, useMemo } from 'react';
 // (berber upisao svoj broj), pa se tu klijenti razlikuju po imenu.
 
 const PAGE = 50;
+
+// Poslednja ucitana lista ostaje u memoriji dok je panel otvoren: povratak na tab je trenutan,
+// a osvezavanje ide u pozadini.
+const cache = { barberId: null, clients: null };
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec'];
 
 // Pretraga ne zavisi od kvacica: "djordjevic" nalazi "Đorđević"
@@ -42,8 +47,10 @@ const aptStatus = (a) => {
 
 export default function Klijenti({ supabase, barber }) {
   const isAdmin = !!barber?.is_admin;
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cached = cache.barberId === barber?.id ? cache.clients : null;
+  const [clients, setClients] = useState(cached || []);
+  const [loading, setLoading] = useState(!cached);
+  const loadingRef = useRef(false);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(PAGE);
@@ -52,21 +59,31 @@ export default function Klijenti({ supabase, barber }) {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const load = async () => {
-    setLoading(true);
+    if (loadingRef.current) return; // isti zahtev se ne salje dvaput
+    loadingRef.current = true;
+    if (!cache.clients || cache.barberId !== barber.id) setLoading(true);
     setError('');
-    const { data, error: err } = await supabase.rpc('get_clients');
+    const { data, error: err } = await withTimeout(supabase.rpc('get_clients'));
+    loadingRef.current = false;
     if (err) {
       console.error('Klijenti:', err.message);
-      setError('Učitavanje klijenata nije uspelo. Osvežite stranicu.');
+      setError(err.message === 'timeout'
+        ? 'Baza ne odgovara. Proverite internet i pokušajte ponovo.'
+        : 'Učitavanje klijenata nije uspelo.');
+      setLoading(false);
+      return;
     }
     // Rang se racuna jednom, pre pretrage, da klijent zadrzi svoje mesto i kad se filtrira
-    setClients((data || []).map((c, i) => ({ ...c, rank: c.placeholder ? null : i + 1 })));
+    const ranked = (data || []).map((c, i) => ({ ...c, rank: c.placeholder ? null : i + 1 }));
+    cache.barberId = barber.id;
+    cache.clients = ranked;
+    setClients(ranked);
     setLoading(false);
   };
 
   useEffect(() => {
-    if (barber) load();
-  }, [barber]);
+    if (barber?.id) load();
+  }, [barber?.id]);
 
   useEffect(() => { setShown(PAGE); }, [query]);
 
@@ -96,7 +113,7 @@ export default function Klijenti({ supabase, barber }) {
     setSelected(c);
     setHistory([]);
     setHistoryLoading(true);
-    const { data, error: err } = await supabase.rpc('get_client_appointments', { p_client_key: c.client_key });
+    const { data, error: err } = await withTimeout(supabase.rpc('get_client_appointments', { p_client_key: c.client_key }));
     if (err) console.error('Istorija klijenta:', err.message);
     setHistory(data || []);
     setHistoryLoading(false);
@@ -119,7 +136,12 @@ export default function Klijenti({ supabase, barber }) {
         </p>
       </section>
 
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && (
+        <div className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+          <p className="text-red-300 text-sm">{error}</p>
+          <button onClick={load} className="shrink-0 px-3 py-1.5 rounded bg-white text-black text-sm">Pokušaj ponovo</button>
+        </div>
+      )}
 
       {!loading && filtered.length === 0 && !error && (
         <p className="text-white/30 text-sm text-center py-8">Nema klijenata za ovu pretragu</p>
