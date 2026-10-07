@@ -379,7 +379,8 @@ export default function Home() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!selectedService) {
+    // Moze glavna usluga sa dodatnim, ili samo dodatna (npr. samo brada)
+    if (!selectedService && selectedAddons.length === 0) {
       alert('Molimo izaberite uslugu.')
       return
     }
@@ -388,18 +389,18 @@ export default function Home() {
 
     // Calculate total service name and price including addons
     const isLoc2 = selectedSalon?.name === 'Tension Barber II'
-    const servicePrice = getPriceForLocation(selectedService, isLoc2) || 0
+    const servicePrice = selectedService ? (getPriceForLocation(selectedService, isLoc2) || 0) : 0
     const addonNames = selectedAddons.map(a => a.name).join(', ')
     const addonTotal = selectedAddons.reduce((sum, a) => sum + (a.price || 0), 0)
-    const fullServiceName = addonNames 
-      ? `${selectedService.name} + ${addonNames}`
-      : selectedService.name
+    const fullServiceName = !selectedService
+      ? addonNames
+      : addonNames ? `${selectedService.name} + ${addonNames}` : selectedService.name
     const fullServicePrice = servicePrice + addonTotal
     
     // Only Tension Full Paket and Tension All Inclusive need double slot
     const doubleSlotServices = ['Tension Full Paket', 'Tension All Inclusive']
     const needsDoubleSlot = doubleSlotServices.some(name => 
-      selectedService.name?.toLowerCase().includes(name.toLowerCase())
+      selectedService?.name?.toLowerCase().includes(name.toLowerCase())
     )
 
     try {
@@ -933,16 +934,14 @@ export default function Home() {
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Izaberite uslugu *</label>
                 <select
-                  required
                   className="w-full bg-black border border-zinc-700 rounded px-3 py-2.5 text-sm focus:border-white focus:outline-none transition appearance-none cursor-pointer"
                   value={selectedService?.id || ''}
                   onChange={(e) => {
                     const service = priceList.find(s => s.id === e.target.value)
-                    setSelectedService(service)
-                    setSelectedAddons([]) // Reset addons when service changes
+                    setSelectedService(service || null)
                   }}
                 >
-                  <option value="">-- Izaberite uslugu --</option>
+                  <option value="">{selectedAddons.length ? '-- Samo dodatna usluga --' : '-- Izaberite uslugu --'}</option>
                   {priceList.filter(s => !s.is_additional).map((service) => {
                     const isLoc2 = selectedSalon?.name === 'Tension Barber II'
                     const displayPrice = getPriceForLocation(service, isLoc2)
@@ -956,10 +955,12 @@ export default function Home() {
                 </select>
               </div>
               
-              {/* Addon services - only show for haircut services */}
-              {selectedService && selectedService.name?.toLowerCase().includes('šišanje') && (
+              {/* Dodatne usluge se uvek vide: uz bilo koju uslugu, ili same (npr. samo brada) */}
+              {(
                 <div className="bg-zinc-800/50 rounded-lg p-3">
-                  <label className="text-xs text-gray-400 block mb-2">Dodatne usluge (opciono)</label>
+                  <label className="text-xs text-gray-400 block mb-2">
+                    {selectedService ? 'Dodatne usluge (opciono)' : 'Dodatne usluge (može i samo dodatna, npr. brada)'}
+                  </label>
                   <div className="space-y-1.5">
                     {priceList.filter(s => s.is_additional).map((addon) => {
                       const isSelected = selectedAddons.some(a => a.id === addon.id)
@@ -1080,7 +1081,7 @@ export default function Home() {
               </div>
               <button
                 type="submit"
-                disabled={isSubmitting || !selectedService}
+                disabled={isSubmitting || (!selectedService && selectedAddons.length === 0)}
                 className="w-full bg-white text-black font-semibold py-3 rounded hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed mt-1"
               >
                 {isSubmitting ? 'ČEKAJTE...' : 'POTVRDI REZERVACIJU'}
