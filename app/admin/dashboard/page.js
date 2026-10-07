@@ -55,6 +55,20 @@ const getNext14Days = () => {
 const MIN_PHONE_DIGITS = 9;
 const phoneDigits = (p) => (p || '').replace(/\D/g, '');
 const fullName = (first, last) => `${(first || '').trim()} ${(last || '').trim()}`.trim();
+// Cena po lokalu, isto pravilo kao na sajtu: Lokal II ima svoju cenu (price_location2),
+// a usluga bez cene za taj lokal je "po dogovoru".
+const isLocation2 = (locationName) => !!locationName && !locationName.includes('Petra');
+const priceAt = (service, locationName) => {
+  if (!service) return null;
+  const raw = isLocation2(locationName) ? service.price_location2 : service.price;
+  const n = raw === null || raw === undefined || raw === '' ? null : Number(raw);
+  return n || null;
+};
+const priceLabel = (service, locationName) => {
+  const p = priceAt(service, locationName);
+  return p ? `${p.toLocaleString('sr-RS')} RSD` : 'po dogovoru';
+};
+
 const salonAddress = (locationName) =>
   locationName?.includes('Petra') ? 'Bulevar kralja Petra I 85' : 'Bulevar patrijarha Pavla 117';
 
@@ -878,12 +892,13 @@ export default function Dashboard() {
     
     // Build service name and price
     let serviceName = mainService ? mainService.name : 'Ručna rezervacija';
-    let servicePrice = mainService ? (mainService.price || 0) : 0;
+    const bookingLocation = barber.locations?.name;
+    let servicePrice = mainService ? (priceAt(mainService, bookingLocation) || 0) : 0;
     let totalDuration = mainService ? (mainService.duration_minutes || slotDuration) : slotDuration;
     
     if (additionalService) {
       serviceName += ' + ' + additionalService.name;
-      servicePrice += additionalService.price || 0;
+      servicePrice += priceAt(additionalService, bookingLocation) || 0;
       totalDuration += additionalService.duration_minutes || 0;
     }
     
@@ -1514,7 +1529,7 @@ export default function Dashboard() {
               <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-medium">Zakaži termin</h3>
-                  <p className="text-white/40 text-sm">{selectedBarberForBooking.name} - {formatDate(allAppointmentsDate)} u {allViewManualBookingSlot}</p>
+                  <p className="text-white/40 text-sm">{selectedBarberForBooking.name} · {isLocation2(selectedBarberForBooking.locations?.name) ? 'Lokal II' : 'Lokal I'} · {formatDate(allAppointmentsDate)} u {allViewManualBookingSlot}</p>
                 </div>
                 <button onClick={() => {
                   setShowAllViewManualBooking(false);
@@ -1570,9 +1585,11 @@ export default function Dashboard() {
                   <label className="text-white/40 text-xs block mb-1">USLUGA *</label>
                   <select name="service" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2">
                     <option value="">Izaberi uslugu</option>
-                    {services.filter(s => !s.is_additional).map(s => (
-                      <option key={s.id} value={s.id} data-name={s.name} data-price={s.price} data-duration={s.duration_minutes}>
-                        {s.name} - {s.price ? `${s.price} RSD` : 'Po dogovoru'}
+                    {allServices.filter(s => !s.is_additional).map(s => (
+                      <option key={s.id} value={s.id} data-name={s.name}
+                        data-price={priceAt(s, selectedBarberForBooking.locations?.name) || 0}
+                        data-duration={s.duration_minutes}>
+                        {s.name} - {priceLabel(s, selectedBarberForBooking.locations?.name)}
                       </option>
                     ))}
                   </select>
@@ -2510,7 +2527,7 @@ export default function Dashboard() {
                   <option value="" className="bg-zinc-900">-- Izaberi uslugu --</option>
                   {allServices.filter(s => !s.is_additional).map(service => (
                     <option key={service.id} value={service.id} className="bg-zinc-900">
-                      {service.name} - {service.price?.toLocaleString() || 0} RSD
+                      {service.name} - {priceLabel(service, barber.locations?.name)}
                     </option>
                   ))}
                 </select>
@@ -2525,7 +2542,7 @@ export default function Dashboard() {
                   <option value="" className="bg-zinc-900">-- Bez dodatne usluge --</option>
                   {allServices.filter(s => s.is_additional).map(service => (
                     <option key={service.id} value={service.id} className="bg-zinc-900">
-                      {service.name} - {service.price?.toLocaleString() || 0} RSD
+                      {service.name} - {priceLabel(service, barber.locations?.name)}
                     </option>
                   ))}
                 </select>
@@ -2539,7 +2556,7 @@ export default function Dashboard() {
                     {(() => {
                       const main = allServices.find(s => s.id === manualBookingForm.serviceId);
                       const add = allServices.find(s => s.id === manualBookingForm.additionalServiceId);
-                      const total = (main?.price || 0) + (add?.price || 0);
+                      const total = (priceAt(main, barber.locations?.name) || 0) + (priceAt(add, barber.locations?.name) || 0);
                       return total.toLocaleString() + ' RSD';
                     })()}
                   </p>
