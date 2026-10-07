@@ -398,9 +398,10 @@ export default function Home() {
     const fullServicePrice = servicePrice + addonTotal
     
     // Only Tension Full Paket and Tension All Inclusive need double slot
-    const doubleSlotServices = ['Tension Full Paket', 'Tension All Inclusive']
-    const needsDoubleSlot = doubleSlotServices.some(name => 
-      selectedService?.name?.toLowerCase().includes(name.toLowerCase())
+    // Tacni nazivi iz cenovnika (sa "$"); ako se usluga preimenuje, mora i ovde
+    const doubleSlotServices = ['Ten$ion full paket', 'Ten$ion All Inclusive']
+    const needsDoubleSlot = doubleSlotServices.some(name =>
+      selectedService?.name?.trim().toLowerCase() === name.toLowerCase()
     )
 
     try {
