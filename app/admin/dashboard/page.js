@@ -1400,7 +1400,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6 p-6 text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
         <div className="text-white text-xl">Ucitavanje...</div>
         {loadStuck && (
           <>
@@ -1425,7 +1425,7 @@ export default function Dashboard() {
   const availableTabs = getAvailableTabs(barber);
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen text-white">
       
       {/* New Appointment Alert */}
       {newAppointmentAlert && (
@@ -1445,7 +1445,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <header className="sticky top-0 bg-black z-40 border-b border-white/10">
+      <header className="sticky top-0 bg-black/80 backdrop-blur-md z-40 border-b border-white/10">
         <div className="text-center py-4 border-b border-white/10">
           <h1 className="text-lg tracking-[0.2em] font-light">
             TENSION BARBER{barber.is_admin ? ' ADMIN' : ''}

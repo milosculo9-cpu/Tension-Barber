@@ -3,37 +3,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { cldUrl, optimizeImageUrl, TRANSFORMS } from '@/lib/cloudinary'
+import { DESKTOP_HERO_IMAGES, MOBILE_HERO_IMAGES, getBackgroundImageUrl } from '@/lib/backgrounds'
 
 // Slike se serviraju sa Cloudinary-ja (folder tension-barber), optimizovane po velicini i formatu
 const stripExt = (file) => file.replace(/\.[a-z0-9]+$/i, '')
 const getLogoUrl = (variant) => cldUrl(`logo/logo.${variant}`, TRANSFORMS.logo)
 const getBarberImageUrl = (slug) => cldUrl(`barbers/${slug}`, TRANSFORMS.barber)
-const getBackgroundImageUrl = (img) =>
-  cldUrl(`backgrounds/${stripExt(img)}`, img.startsWith('mobile/') ? TRANSFORMS.backgroundMobile : TRANSFORMS.background)
 const getShopImageUrl = (img) => cldUrl(`shops/${stripExt(img)}`, TRANSFORMS.shop)
-
-// Desktop hero images
-const DESKTOP_HERO_IMAGES = [
-  'IMG_8161.jpeg',
-  'IMG_4953.jpeg',
-  'IMG_3.jpeg',
-  'IMG_4951.jpeg',
-  'IMG_8168.jpeg',
-  'IMG_4958.jpeg',
-  'IMG_8166.jpeg',
-  'IMG_4955.jpeg',
-  'IMG_8169.jpeg',
-]
-
-// Mobile hero images (in mobile subfolder)
-const MOBILE_HERO_IMAGES = [
-  'mobile/1.jpeg',
-  'mobile/2.jpeg',
-  'mobile/3.jpeg',
-  'mobile/4.jpeg',
-  'mobile/5.jpeg',
-  'mobile/6.jpeg',
-]
 
 // Helper function to get price based on location
 const getPriceForLocation = (service, isLocation2) => {

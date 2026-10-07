@@ -106,7 +106,7 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 overflow-hidden">
       
       {preloading && (
         <div 
