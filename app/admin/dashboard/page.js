@@ -270,6 +270,26 @@ export default function Dashboard() {
     }
   }, [selectedDate, barber]);
 
+  // Veza sa bazom se drzi zivom: kad panel stoji neaktivan, mreza tiho prekine vezu, a Safari
+  // posle toga i do minut ceka na mrtvoj vezi. Mali upit na 25 s (samo dok je tab vidljiv)
+  // to sprecava, a povratak na tab ili budjenje racunara odmah osvezava vezu.
+  useEffect(() => {
+    if (!barber?.id) return;
+    const ping = () => {
+      if (document.visibilityState !== 'visible') return;
+      supabase.from('locations').select('id').limit(1).then(() => {}, () => {});
+    };
+    const timer = setInterval(ping, 25000);
+    const onVisible = () => { if (document.visibilityState === 'visible') ping(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', ping);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', ping);
+    };
+  }, [barber?.id]);
+
   // Promena dana prekida pomeranje, jer se termin pomera samo u okviru istog dana
   useEffect(() => { setMoveMode(null); }, [allAppointmentsDate]);
 

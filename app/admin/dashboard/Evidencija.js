@@ -122,17 +122,20 @@ export default function Evidencija({ supabase, barber, locations = [] }) {
     const pageSize = 1000;
     let rows = [];
     for (let page = 0; page < 20; page++) {
-      let query = supabase
-        .from('appointments')
-        .select('id, barber_id, customer_name, customer_phone, service_name, service_price, appointment_date, appointment_time, duration_minutes, status, no_show')
-        .gte('appointment_date', from)
-        .lte('appointment_date', to)
-        .neq('status', 'cancelled')
-        .order('appointment_date', { ascending: true })
-        .order('appointment_time', { ascending: true })
-        .range(page * pageSize, page * pageSize + pageSize - 1);
-      if (!isAdmin) query = query.eq('barber_id', barber.id);
-      const { data, error } = await withTimeout(query);
+      const makeQuery = () => {
+        let query = supabase
+          .from('appointments')
+          .select('id, barber_id, customer_name, customer_phone, service_name, service_price, appointment_date, appointment_time, duration_minutes, status, no_show')
+          .gte('appointment_date', from)
+          .lte('appointment_date', to)
+          .neq('status', 'cancelled')
+          .order('appointment_date', { ascending: true })
+          .order('appointment_time', { ascending: true })
+          .range(page * pageSize, page * pageSize + pageSize - 1);
+        if (!isAdmin) query = query.eq('barber_id', barber.id);
+        return query;
+      };
+      const { data, error } = await withTimeout(makeQuery);
       if (requestId !== requestRef.current) return;
       if (error) {
         console.error('Evidencija:', error.message);

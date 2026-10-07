@@ -63,7 +63,7 @@ export default function Klijenti({ supabase, barber }) {
     loadingRef.current = true;
     if (!cache.clients || cache.barberId !== barber.id) setLoading(true);
     setError('');
-    const { data, error: err } = await withTimeout(supabase.rpc('get_clients'));
+    const { data, error: err } = await withTimeout(() => supabase.rpc('get_clients'));
     loadingRef.current = false;
     if (err) {
       console.error('Klijenti:', err.message);
@@ -113,7 +113,7 @@ export default function Klijenti({ supabase, barber }) {
     setSelected(c);
     setHistory([]);
     setHistoryLoading(true);
-    const { data, error: err } = await withTimeout(supabase.rpc('get_client_appointments', { p_client_key: c.client_key }));
+    const { data, error: err } = await withTimeout(() => supabase.rpc('get_client_appointments', { p_client_key: c.client_key }));
     if (err) console.error('Istorija klijenta:', err.message);
     setHistory(data || []);
     setHistoryLoading(false);
