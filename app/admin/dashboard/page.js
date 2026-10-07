@@ -1386,7 +1386,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         
-                        <div className="grid grid-cols-6 sm:grid-cols-8 gap-1">
+                        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-1.5">
                           {barberTimeSlots.map(time => {
                             const isAvailable = barberData.available.includes(time);
                             const isBooked = barberData.booked.includes(time);
@@ -1436,13 +1436,19 @@ export default function Dashboard() {
                                     setShowAllViewManualBooking(true);
                                   }
                                 }}
-                                className={`py-2 rounded text-xs font-medium transition-all
+                                className={`min-h-[3.25rem] px-1.5 py-1.5 rounded text-xs font-medium transition-all flex flex-col items-center justify-center leading-tight
                                   ${useGradient ? 'text-white' : bgColor}`}
                                 style={useGradient ? {
                                   background: 'linear-gradient(135deg, #16a34a 50%, #dc2626 50%)'
                                 } : {}}
                               >
-                                {time}
+                                <span>{time}</span>
+                                {/* Ime klijenta se vidi odmah, bez otvaranja termina */}
+                                {slotAppointment && (
+                                  <span className="mt-0.5 w-full truncate text-[10px] font-normal opacity-90" title={slotAppointment.customer_name}>
+                                    {slotAppointment.customer_name}
+                                  </span>
+                                )}
                               </button>
                             );
                           })}
