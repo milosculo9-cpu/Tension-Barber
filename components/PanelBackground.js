@@ -40,7 +40,7 @@ export default function PanelBackground() {
           }}
         />
       ))}
-      <div className="absolute inset-0 bg-black/85" />
+      <div className="absolute inset-0 bg-black/[0.92]" />
     </div>
   );
 }
