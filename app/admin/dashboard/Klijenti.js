@@ -196,11 +196,11 @@ export default function Klijenti({ supabase, barber }) {
       {/* Kartica klijenta */}
       {selected && (
         <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          className="modal-overlay bg-black/90 z-50"
           onClick={() => setSelected(null)}
         >
           <div
-            className="bg-zinc-900 rounded-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col"
+            className="modal-panel bg-zinc-900 rounded-xl w-full max-w-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-zinc-700 flex justify-between items-start gap-3">
@@ -232,7 +232,7 @@ export default function Klijenti({ supabase, barber }) {
               </p>
             )}
 
-            <div className="overflow-y-auto p-4 space-y-1">
+            <div className="p-4 space-y-1">
               {historyLoading ? (
                 <p className="text-white/30 text-sm text-center py-6">Učitavanje istorije...</p>
               ) : history.map(a => {

@@ -1706,8 +1706,8 @@ export default function Dashboard() {
 
         {/* Manual Booking Modal for All View */}
         {showAllViewManualBooking && selectedBarberForBooking && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-            <div className="bg-zinc-900 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="modal-overlay bg-black/90 z-50">
+            <div className="modal-panel bg-zinc-900 rounded-lg w-full max-w-md">
               <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-medium">Zakaži termin</h3>
@@ -1773,9 +1773,11 @@ export default function Dashboard() {
                   addonIds={allViewServices.addonIds}
                   onChange={setAllViewServices}
                 />
-                <button type="submit" className="w-full py-3 bg-white text-black rounded-lg font-medium">
-                  ZAKAŽI
-                </button>
+                <div className="modal-actions">
+                  <button type="submit" className="w-full py-3 bg-white text-black rounded-lg font-medium">
+                    ZAKAŽI
+                  </button>
+                </div>
               </form>
             </div>
           </div>
@@ -2501,8 +2503,8 @@ export default function Dashboard() {
       </main>
 
       {editingService && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4">
-          <div className="bg-neutral-900 w-full max-w-md rounded-t-2xl p-6">
+        <div className="modal-overlay bg-black/80 z-50">
+          <div className="modal-panel bg-neutral-900 w-full max-w-md rounded-2xl p-6">
             <h3 className="text-lg font-medium mb-4">Izmeni uslugu</h3>
             <div className="mb-4">
               <label className="block text-white/40 text-xs mb-2">NAZIV USLUGE</label>
@@ -2555,11 +2557,11 @@ export default function Dashboard() {
       {/* Past Appointments Modal */}
       {showPastAppointments && (
         <div 
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          className="modal-overlay bg-black/90 z-50"
           onClick={() => setShowPastAppointments(null)}
         >
           <div 
-            className="bg-zinc-900 rounded-xl w-full max-w-md max-h-[80vh] overflow-hidden"
+            className="modal-panel bg-zinc-900 rounded-xl w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
@@ -2637,11 +2639,11 @@ export default function Dashboard() {
       {/* Manual Booking Modal */}
       {showManualBooking && (
         <div 
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          className="modal-overlay bg-black/90 z-50"
           onClick={() => setShowManualBooking(false)}
         >
           <div 
-            className="bg-zinc-900 rounded-xl w-full max-w-md"
+            className="modal-panel bg-zinc-900 rounded-xl w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-zinc-700">
@@ -2704,7 +2706,7 @@ export default function Dashboard() {
                 onChange={({ mainId, addonIds }) => setManualBookingForm(prev => ({ ...prev, serviceId: mainId, addonIds }))}
               />
               
-              <div className="flex gap-2 pt-2">
+              <div className="modal-actions flex gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -2731,11 +2733,11 @@ export default function Dashboard() {
             {/* Appointment Detail Modal */}
       {selectedAppointment && (
         <div 
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          className="modal-overlay bg-black/90 z-50"
           onClick={() => setSelectedAppointment(null)}
         >
           <div 
-            className="bg-zinc-900 rounded-xl w-full max-w-md"
+            className="modal-panel bg-zinc-900 rounded-xl w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
@@ -2888,11 +2890,11 @@ export default function Dashboard() {
       {/* Blocked Slot Modal - for slots marked as booked but without appointment data */}
       {blockedSlotTime && (
         <div 
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          className="modal-overlay bg-black/90 z-50"
           onClick={() => setBlockedSlotTime(null)}
         >
           <div 
-            className="bg-zinc-900 rounded-xl w-full max-w-sm"
+            className="modal-panel bg-zinc-900 rounded-xl w-full max-w-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-zinc-700">

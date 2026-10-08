@@ -885,11 +885,11 @@ export default function Home() {
       {/* ==================== BOOKING MODAL ==================== */}
       {showForm && (
         <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-3 animate-fade-in overflow-y-auto"
+          className="modal-overlay bg-black/80 z-50 animate-fade-in"
           onClick={() => { setShowForm(false); setOpenDropdown(null); setSelectedAddons([]); }}
         >
           <div 
-            className="bg-zinc-900 p-4 md:p-8 rounded-lg max-w-md w-full animate-slide-up my-auto"
+            className="modal-panel bg-zinc-900 p-4 md:p-8 rounded-lg max-w-md w-full animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-4">
@@ -1056,13 +1056,15 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-              <button
-                type="submit"
-                disabled={isSubmitting || (!selectedService && selectedAddons.length === 0)}
-                className="w-full bg-white text-black font-semibold py-3 rounded hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed mt-1"
-              >
-                {isSubmitting ? 'ČEKAJTE...' : 'POTVRDI REZERVACIJU'}
-              </button>
+              <div className="modal-actions">
+                <button
+                  type="submit"
+                  disabled={isSubmitting || (!selectedService && selectedAddons.length === 0)}
+                  className="w-full bg-white text-black font-semibold py-3 rounded hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'ČEKAJTE...' : 'POTVRDI REZERVACIJU'}
+                </button>
+              </div>
             </form>
           </div>
         </div>

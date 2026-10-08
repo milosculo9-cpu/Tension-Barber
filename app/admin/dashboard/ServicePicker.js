@@ -62,7 +62,7 @@ export default function ServicePicker({ services, locationName, mainId, addonIds
           <label className="block text-white/50 text-xs mb-1">
             Dodatne usluge {mainId ? '(opciono)' : '(može i samo dodatna, npr. brada)'}
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5">
             {addons.map(a => {
               const on = addonIds.includes(a.id);
               return (
@@ -70,11 +70,11 @@ export default function ServicePicker({ services, locationName, mainId, addonIds
                   key={a.id}
                   type="button"
                   onClick={() => toggleAddon(a.id)}
-                  className={`flex items-center justify-between gap-2 px-3 py-2 rounded text-sm text-left
+                  className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded text-xs sm:text-sm text-left leading-tight
                     ${on ? 'bg-white text-black' : 'bg-white/5 text-white hover:bg-white/10'}`}
                 >
-                  <span className="truncate">{a.name}</span>
-                  <span className={`shrink-0 text-xs ${on ? 'text-black/60' : 'text-white/40'}`}>
+                  <span className="line-clamp-2 sm:truncate">{a.name}</span>
+                  <span className={`shrink-0 text-[11px] sm:text-xs ${on ? 'text-black/60' : 'text-white/40'}`}>
                     {priceLabel(a, locationName)} {on ? '✓' : '+'}
                   </span>
                 </button>
