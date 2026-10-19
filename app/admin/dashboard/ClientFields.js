@@ -6,6 +6,8 @@ import { withTimeout } from '@/lib/timeout';
 // Podaci klijenta u formi za zakazivanje. Telefon je prvo polje: cim se upise ceo broj,
 // klijent se trazi u bazi i ime, prezime i mejl se popune sami (usluga se bira rucno).
 // Polja koja je korisnik sam izmenio se ne prepisuju.
+// `original` (izmena klijenta na postojecem terminu): podaci sa termina se tretiraju kao
+// zamenljivi, pa drugi broj donosi drugog klijenta, a nov broj prazni polja za novog klijenta.
 
 const MIN_DIGITS = 9;
 const digitsOf = (p) => (p || '').replace(/\D/g, '');
@@ -15,9 +17,11 @@ const splitName = (full) => {
   return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') };
 };
 
-export default function ClientFields({ supabase, value, onChange, inputClass }) {
+export default function ClientFields({ supabase, value, onChange, inputClass, original }) {
   const [lookup, setLookup] = useState(null); // null | 'loading' | { found, ... }
-  const autoFilled = useRef({ firstName: '', lastName: '', email: '' });
+  const autoFilled = useRef(original
+    ? { firstName: original.firstName, lastName: original.lastName, email: original.email }
+    : { firstName: '', lastName: '', email: '' });
   const valueRef = useRef(value);
   valueRef.current = value;
 
@@ -49,6 +53,8 @@ export default function ClientFields({ supabase, value, onChange, inputClass }) 
       };
       if (!row) { setLookup({ found: false }); clearAutoFilled(); return; }
       setLookup({ found: true, ...row });
+      // Isti broj kao na terminu: samo se prikaze da je klijent u bazi, podaci ostaju
+      if (original && digitsOf(phone) === digitsOf(original.phone)) return;
       if (row.shared_phone || !row.customer_name) { clearAutoFilled(); return; }
 
       // Popunjava se samo prazno polje ili ono koje je ranije popunjeno automatski
@@ -77,7 +83,7 @@ export default function ClientFields({ supabase, value, onChange, inputClass }) 
           className={cls}
           placeholder="06x xxx xxxx"
           required
-          autoFocus
+          autoFocus={!original}
         />
         <p className="text-[11px] mt-1 min-h-[1rem]">
           {lookup === 'loading' && <span className="text-white/40">Tražim klijenta...</span>}

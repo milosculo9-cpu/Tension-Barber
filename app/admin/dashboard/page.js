@@ -165,6 +165,7 @@ export default function Dashboard() {
   const [slotEditMode, setSlotEditMode] = useState(false); // pult otvara/zatvara termine berberima
   const [slotSaving, setSlotSaving] = useState(null);
   const [serviceEdit, setServiceEdit] = useState(null); // { mainId, addonIds } dok pult menja uslugu na terminu
+  const [clientEdit, setClientEdit] = useState(null);   // { value, original } dok pult menja klijenta na terminu
   const [drag, setDrag] = useState(null);              // { apt, x, y, active, overKey }
   const dragRef = useRef(null);
   const suppressClickRef = useRef(false);
@@ -295,7 +296,7 @@ export default function Dashboard() {
     };
   }, [barber?.id]);
 
-  useEffect(() => { setServiceEdit(null); }, [selectedAppointment?.id]);
+  useEffect(() => { setServiceEdit(null); setClientEdit(null); }, [selectedAppointment?.id]);
 
   // Promena dana prekida pomeranje, jer se termin pomera samo u okviru istog dana
   useEffect(() => { setMoveMode(null); }, [allAppointmentsDate]);
@@ -839,6 +840,42 @@ export default function Dashboard() {
     }
     setSelectedAppointment({ ...apt, service_name: selection.name, service_price: selection.price, duration_minutes: selection.duration });
     setServiceEdit(null);
+    refreshAfterChange();
+  };
+
+  // Pult menja klijenta na terminu (pogresno upisan, ili je dosao neko drugi umesto zakazanog)
+  const startClientEdit = (apt) => {
+    const parts = (apt.customer_name || '').trim().split(/\s+/).filter(Boolean);
+    const original = {
+      firstName: parts[0] || '', lastName: parts.slice(1).join(' '),
+      phone: apt.customer_phone || '', email: apt.customer_email || ''
+    };
+    setClientEdit({ value: { ...original }, original });
+  };
+
+  const saveClientEdit = async () => {
+    const apt = selectedAppointment;
+    const v = clientEdit.value;
+    if (!v.firstName.trim() || !v.lastName.trim()) {
+      alert('Upišite ime i prezime klijenta.');
+      return;
+    }
+    if (phoneDigits(v.phone).length < MIN_PHONE_DIGITS) {
+      alert('Upišite pravi broj telefona klijenta (najmanje 9 cifara).');
+      return;
+    }
+    const changes = {
+      customer_name: fullName(v.firstName, v.lastName),
+      customer_phone: v.phone.trim(),
+      customer_email: v.email.trim()
+    };
+    const { error } = await supabase.from('appointments').update(changes).eq('id', apt.id);
+    if (error) {
+      alert(`Izmena klijenta nije uspela: ${error.message}`);
+      return;
+    }
+    setSelectedAppointment({ ...apt, ...changes });
+    setClientEdit(null);
     refreshAfterChange();
   };
 
@@ -2787,8 +2824,34 @@ export default function Dashboard() {
             </div>
             <div className="p-4 space-y-4">
               <div>
-                <p className="text-white/40 text-xs">KLIJENT</p>
-                <p className="text-lg font-medium">{selectedAppointment.customer_name}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white/40 text-xs">KLIJENT</p>
+                    <p className="text-lg font-medium">{selectedAppointment.customer_name}</p>
+                  </div>
+                  {barber?.is_admin && selectedAppointment.status !== 'cancelled' && !clientEdit && (
+                    <button
+                      onClick={() => startClientEdit(selectedAppointment)}
+                      className="shrink-0 text-xs px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20"
+                    >
+                      IZMENI KLIJENTA
+                    </button>
+                  )}
+                </div>
+                {clientEdit && (
+                  <div className="mt-3 p-3 rounded-lg bg-white/5 border border-white/10 space-y-3">
+                    <ClientFields
+                      supabase={supabase}
+                      value={clientEdit.value}
+                      original={clientEdit.original}
+                      onChange={(value) => setClientEdit(prev => ({ ...prev, value }))}
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => setClientEdit(null)} className="flex-1 py-2.5 rounded-lg bg-white/10 text-sm">Odustani</button>
+                      <button onClick={saveClientEdit} className="flex-1 py-2.5 rounded-lg bg-white text-black text-sm font-medium">Sačuvaj klijenta</button>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Birthday notice */}
