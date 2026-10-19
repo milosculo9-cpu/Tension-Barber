@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { uploadImage, optimizeImageUrl, TRANSFORMS } from '@/lib/cloudinary';
 import Evidencija from './Evidencija';
 import Klijenti from './Klijenti';
-import ServicePicker, { isLocation2, describeSelection } from './ServicePicker';
+import ServicePicker, { isLocation2, describeSelection, parseSelection } from './ServicePicker';
+import ClientFields from './ClientFields';
 
 const generateTimeSlots = (locationName, duration = 30) => {
   const slots = [];
@@ -158,8 +159,12 @@ export default function Dashboard() {
   const [allViewManualBookingSlot, setAllViewManualBookingSlot] = useState(null);
   const [showAllViewManualBooking, setShowAllViewManualBooking] = useState(false);
   const [allViewServices, setAllViewServices] = useState({ mainId: null, addonIds: [] });
+  const [allViewClient, setAllViewClient] = useState({ firstName: '', lastName: '', phone: '', email: '' });
   // Pomeranje termina (samo pult): prevlacenjem ili dugmetom POMERI pa klik na slobodan termin
   const [moveMode, setMoveMode] = useState(null);      // termin koji se pomera klikom
+  const [slotEditMode, setSlotEditMode] = useState(false); // pult otvara/zatvara termine berberima
+  const [slotSaving, setSlotSaving] = useState(null);
+  const [serviceEdit, setServiceEdit] = useState(null); // { mainId, addonIds } dok pult menja uslugu na terminu
   const [drag, setDrag] = useState(null);              // { apt, x, y, active, overKey }
   const dragRef = useRef(null);
   const suppressClickRef = useRef(false);
@@ -289,6 +294,8 @@ export default function Dashboard() {
       window.removeEventListener('online', ping);
     };
   }, [barber?.id]);
+
+  useEffect(() => { setServiceEdit(null); }, [selectedAppointment?.id]);
 
   // Promena dana prekida pomeranje, jer se termin pomera samo u okviru istog dana
   useEffect(() => { setMoveMode(null); }, [allAppointmentsDate]);
@@ -804,6 +811,61 @@ export default function Dashboard() {
 
   // Lokal berbera kod kog je termin; pomera se samo u okviru istog lokala
   const aptLocationId = (apt) => allBarbers.find(b => b.id === apt?.barber_id)?.location_id;
+
+  // Pult menja ili dodaje uslugu na zakazanom terminu (i dok traje); cena po lokalu berbera
+  const appointmentLocationName = (apt) =>
+    allBarbers.find(b => b.id === apt.barber_id)?.locations?.name
+    || (apt.barber_id === barber?.id ? barber.locations?.name : null);
+
+  const saveServiceEdit = async () => {
+    const apt = selectedAppointment;
+    const selection = describeSelection(allServices, serviceEdit.mainId, serviceEdit.addonIds, appointmentLocationName(apt));
+    if (!selection) {
+      alert('Izaberite uslugu.');
+      return;
+    }
+    const { error } = await supabase
+      .from('appointments')
+      .update({
+        service_id: selection.serviceId,
+        service_name: selection.name,
+        service_price: selection.price,
+        duration_minutes: selection.duration
+      })
+      .eq('id', apt.id);
+    if (error) {
+      alert(`Izmena usluge nije uspela: ${error.message}`);
+      return;
+    }
+    setSelectedAppointment({ ...apt, service_name: selection.name, service_price: selection.price, duration_minutes: selection.duration });
+    setServiceEdit(null);
+    refreshAfterChange();
+  };
+
+  // Pult otvara (sivo -> belo) ili zatvara (belo -> sivo) termin bilo kom berberu, isto kao berber u svom panelu
+  const toggleSlotForBarber = async (targetBarber, time, isOpen) => {
+    const dateStr = formatDate(allAppointmentsDate);
+    const key = `${targetBarber.id}|${time}`;
+    setSlotSaving(key);
+    const { error } = isOpen
+      ? await supabase.from('barber_available_slots').delete()
+          .eq('barber_id', targetBarber.id).eq('slot_date', dateStr).eq('slot_time', time + ':00').eq('is_booked', false)
+      : await supabase.from('barber_available_slots')
+          .upsert({ barber_id: targetBarber.id, slot_date: dateStr, slot_time: time + ':00', is_booked: false },
+                  { onConflict: 'barber_id,slot_date,slot_time' });
+    setSlotSaving(null);
+    if (error) {
+      alert(`Promena termina nije uspela: ${error.message}`);
+      return;
+    }
+    // Odmah se prikazuje promena, pa se osvezava iz baze
+    setAllBarberSlots(prev => {
+      const cur = prev[targetBarber.id] || { available: [], booked: [], duration: 30 };
+      const available = isOpen ? cur.available.filter(t => t !== time) : [...cur.available, time];
+      return { ...prev, [targetBarber.id]: { ...cur, available } };
+    });
+    loadAllAppointments(allAppointmentsDate);
+  };
 
   // Pomeranje termina na slobodno mesto istog dana, kod istog ili drugog berbera u istom lokalu
   const moveAppointment = async (apt, targetBarber, time) => {
@@ -1518,6 +1580,28 @@ export default function Dashboard() {
               </div>
             )}
             {barber?.is_admin && (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => { setSlotEditMode(false); }}
+                  className={`py-2.5 rounded-lg text-sm ${!slotEditMode ? 'bg-white text-black font-medium' : 'bg-white/10 text-white/60'}`}
+                >
+                  Zakazivanje
+                </button>
+                <button
+                  onClick={() => { setSlotEditMode(true); setMoveMode(null); }}
+                  className={`py-2.5 rounded-lg text-sm ${slotEditMode ? 'bg-white text-black font-medium' : 'bg-white/10 text-white/60'}`}
+                >
+                  Otvaranje / zatvaranje termina
+                </button>
+              </div>
+            )}
+            {barber?.is_admin && slotEditMode && (
+              <p className="text-yellow-300/90 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                Klik na <b>sivo</b> polje otvara termin berberu, klik na <b>belo</b> ga zatvara. Zakazani termini se ne menjaju.
+                Za zakazivanje se vratite na „Zakazivanje”.
+              </p>
+            )}
+            {barber?.is_admin && !slotEditMode && (
               <p className="text-white/30 text-xs">
                 Termin se pomera prevlačenjem na slobodan (beli) termin u istom lokalu. Na telefonu: zadržite prst na terminu, pa prevucite.
               </p>
@@ -1658,11 +1742,17 @@ export default function Dashboard() {
                                     if (isFree) moveAppointment(moveMode, targetBarber, time);
                                     return;
                                   }
+                                  if (slotEditMode && !slotAppointment) {
+                                    if (isFree) toggleSlotForBarber(targetBarber, time, true);
+                                    else if (!isBooked) toggleSlotForBarber(targetBarber, time, false);
+                                    return;
+                                  }
                                   if (isBooked && slotAppointment) {
                                     setSelectedAppointment(slotAppointment);
                                   } else if (isAvailable) {
                                     setSelectedBarberForBooking(targetBarber);
                                     setAllViewServices({ mainId: null, addonIds: [] });
+                                    setAllViewClient({ firstName: '', lastName: '', phone: '', email: '' });
                                     setAllViewManualBookingSlot(time);
                                     setShowAllViewManualBooking(true);
                                   }
@@ -1672,7 +1762,9 @@ export default function Dashboard() {
                                   ${canDrag ? 'cursor-grab' : ''}
                                   ${isDragSource ? 'opacity-40' : ''}
                                   ${isMoveTarget ? 'ring-2 ring-blue-400/60' : ''}
-                                  ${isDropTarget ? 'ring-4 ring-blue-400 scale-105' : ''}`}
+                                  ${isDropTarget ? 'ring-4 ring-blue-400 scale-105' : ''}
+                                  ${slotEditMode && !slotAppointment && !isBooked ? 'outline outline-1 outline-dashed outline-white/30' : ''}
+                                  ${slotSaving === slotKey ? 'opacity-50' : ''}`}
                                 style={useGradient ? {
                                   background: 'linear-gradient(135deg, #16a34a 50%, #dc2626 50%)'
                                 } : {}}
@@ -1721,21 +1813,20 @@ export default function Dashboard() {
               </div>
               <form onSubmit={async (e) => {
                 e.preventDefault();
-                const form = e.target;
                 const selection = describeSelection(allServices, allViewServices.mainId, allViewServices.addonIds,
                   selectedBarberForBooking.locations?.name);
                 if (!selection) {
                   alert('Izaberite uslugu.');
                   return;
                 }
-                if (phoneDigits(form.phone.value).length < MIN_PHONE_DIGITS) {
+                if (phoneDigits(allViewClient.phone).length < MIN_PHONE_DIGITS) {
                   alert('Upišite pravi broj telefona klijenta (najmanje 9 cifara).');
                   return;
                 }
                 const success = await bookSlotForBarber(selectedBarberForBooking, allViewManualBookingSlot, {
-                  name: fullName(form.firstName.value, form.lastName.value),
-                  phone: form.phone.value.trim(),
-                  email: form.email.value.trim(),
+                  name: fullName(allViewClient.firstName, allViewClient.lastName),
+                  phone: allViewClient.phone.trim(),
+                  email: allViewClient.email.trim(),
                   service_id: selection.serviceId,
                   service_name: selection.name,
                   service_price: selection.price,
@@ -1748,24 +1839,7 @@ export default function Dashboard() {
                   setAllViewManualBookingSlot(null);
                 }
               }} className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-white/40 text-xs block mb-1">IME *</label>
-                    <input name="firstName" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
-                  </div>
-                  <div>
-                    <label className="text-white/40 text-xs block mb-1">PREZIME *</label>
-                    <input name="lastName" required className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-white/40 text-xs block mb-1">TELEFON *</label>
-                  <input name="phone" type="tel" required placeholder="06x xxx xxxx" className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
-                </div>
-                <div>
-                  <label className="text-white/40 text-xs block mb-1">EMAIL (opciono, šalje se potvrda)</label>
-                  <input name="email" type="email" className="w-full bg-black border border-zinc-700 rounded px-3 py-2" />
-                </div>
+                <ClientFields supabase={supabase} value={allViewClient} onChange={setAllViewClient} />
                 <ServicePicker
                   services={allServices}
                   locationName={selectedBarberForBooking.locations?.name}
@@ -2653,51 +2727,13 @@ export default function Dashboard() {
               </p>
             </div>
             <form onSubmit={handleManualBooking} className="p-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-white/50 text-xs mb-1">Ime *</label>
-                  <input
-                    type="text"
-                    value={manualBookingForm.firstName}
-                    onChange={(e) => setManualBookingForm(prev => ({ ...prev, firstName: e.target.value }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
-                    placeholder="Ime"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-white/50 text-xs mb-1">Prezime *</label>
-                  <input
-                    type="text"
-                    value={manualBookingForm.lastName}
-                    onChange={(e) => setManualBookingForm(prev => ({ ...prev, lastName: e.target.value }))}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
-                    placeholder="Prezime"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-white/50 text-xs mb-1">Telefon *</label>
-                <input
-                  type="tel"
-                  value={manualBookingForm.phone}
-                  onChange={(e) => setManualBookingForm(prev => ({ ...prev, phone: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
-                  placeholder="06x xxx xxxx"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-white/50 text-xs mb-1">Email (opciono, šalje se potvrda)</label>
-                <input
-                  type="email"
-                  value={manualBookingForm.email}
-                  onChange={(e) => setManualBookingForm(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
-                  placeholder="klijent@email.com"
-                />
-              </div>
+              <ClientFields
+                supabase={supabase}
+                value={manualBookingForm}
+                onChange={(v) => setManualBookingForm(prev => ({ ...prev, firstName: v.firstName, lastName: v.lastName, phone: v.phone, email: v.email }))}
+                inputClass="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white"
+              />
+              
               <ServicePicker
                 services={allServices}
                 locationName={barber.locations?.name}
@@ -2798,8 +2834,35 @@ export default function Dashboard() {
               )}
               
               <div>
-                <p className="text-white/40 text-xs">USLUGA</p>
-                <p className="text-lg">{selectedAppointment.service_name}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white/40 text-xs">USLUGA</p>
+                    <p className="text-lg">{selectedAppointment.service_name}</p>
+                  </div>
+                  {barber?.is_admin && selectedAppointment.status !== 'cancelled' && !serviceEdit && (
+                    <button
+                      onClick={() => setServiceEdit(parseSelection(allServices, selectedAppointment.service_name))}
+                      className="shrink-0 text-xs px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20"
+                    >
+                      IZMENI USLUGU
+                    </button>
+                  )}
+                </div>
+                {serviceEdit && (
+                  <div className="mt-3 p-3 rounded-lg bg-white/5 border border-white/10 space-y-3">
+                    <ServicePicker
+                      services={allServices}
+                      locationName={appointmentLocationName(selectedAppointment)}
+                      mainId={serviceEdit.mainId}
+                      addonIds={serviceEdit.addonIds}
+                      onChange={setServiceEdit}
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => setServiceEdit(null)} className="flex-1 py-2.5 rounded-lg bg-white/10 text-sm">Odustani</button>
+                      <button onClick={saveServiceEdit} className="flex-1 py-2.5 rounded-lg bg-white text-black text-sm font-medium">Sačuvaj uslugu</button>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="flex gap-4">

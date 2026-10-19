@@ -98,3 +98,18 @@ export default function ServicePicker({ services, locationName, mainId, addonIds
     </div>
   );
 }
+
+// Iz naziva usluge na terminu ("Glavna + Dodatna, Dodatna" ili samo "Dodatna, Dodatna")
+// vraca izbor za ServicePicker, da izmena krene od onoga sto je vec zakazano.
+export const parseSelection = (services, serviceName) => {
+  const name = (serviceName || '').trim();
+  const byName = (n) => services.find(s => s.name.trim().toLowerCase() === n.trim().toLowerCase());
+  const whole = byName(name);
+  if (whole) return whole.is_additional ? { mainId: null, addonIds: [whole.id] } : { mainId: whole.id, addonIds: [] };
+  const plus = name.indexOf(' + ');
+  const mainPart = plus >= 0 ? name.slice(0, plus) : null;
+  const addonPart = plus >= 0 ? name.slice(plus + 3) : name;
+  const main = mainPart ? byName(mainPart) : null;
+  const addonIds = addonPart.split(', ').map(byName).filter(s => s && s.is_additional).map(s => s.id);
+  return { mainId: main && !main.is_additional ? main.id : null, addonIds };
+};
