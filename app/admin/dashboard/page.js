@@ -8,6 +8,7 @@ import Evidencija from './Evidencija';
 import Klijenti from './Klijenti';
 import ServicePicker, { isLocation2, describeSelection, parseSelection } from './ServicePicker';
 import ClientFields from './ClientFields';
+import WaitlistModal from './WaitlistModal';
 
 const generateTimeSlots = (locationName, duration = 30) => {
   const slots = [];
@@ -154,6 +155,8 @@ export default function Dashboard() {
   const [allAppointmentsData, setAllAppointmentsData] = useState([]);
   const [allAppointmentsDate, setAllAppointmentsDate] = useState(new Date());
   const [selectedBarberFilter, setSelectedBarberFilter] = useState('all');
+  const [allWaitlist, setAllWaitlist] = useState([]);   // lista cekanja za izabrani dan (svi berberi)
+  const [waitlistBarber, setWaitlistBarber] = useState(null);
   const [allBarberSlots, setAllBarberSlots] = useState({}); // { barberId: { available: [], booked: [], duration: 30 } }
   const [selectedBarberForBooking, setSelectedBarberForBooking] = useState(null);
   const [allViewManualBookingSlot, setAllViewManualBookingSlot] = useState(null);
@@ -636,6 +639,15 @@ export default function Dashboard() {
     });
     
     setAllBarberSlots(slotsByBarber);
+
+    // Lista cekanja za taj dan
+    const { data: waiting } = await supabase
+      .from('waitlist')
+      .select('*')
+      .eq('wait_date', dateStr)
+      .eq('status', 'waiting')
+      .order('created_at');
+    setAllWaitlist(waiting || []);
   };
 
   // Book slot for any barber (from all-view)
@@ -1716,6 +1728,17 @@ export default function Dashboard() {
                           <div className="text-right text-xs text-white/40">
                             <p>Trajanje: {barberData.duration} min</p>
                             <p>Slobodno: {barberData.available.length} | Zakazano: {barberData.booked.length}</p>
+                            {barber?.is_admin && (() => {
+                              const waitingCount = allWaitlist.filter(w => w.barber_id === targetBarber.id).length;
+                              return (
+                                <button
+                                  onClick={() => setWaitlistBarber(targetBarber)}
+                                  className={`mt-1.5 px-2.5 py-1 rounded-full text-[11px] ${waitingCount ? 'bg-yellow-500/20 text-yellow-300' : 'bg-white/10 text-white/50'}`}
+                                >
+                                  {waitingCount ? `Lista čekanja: ${waitingCount}` : '+ Lista čekanja'}
+                                </button>
+                              );
+                            })()}
                           </div>
                         </div>
                         
@@ -3011,6 +3034,17 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {waitlistBarber && (
+        <WaitlistModal
+          supabase={supabase}
+          barber={waitlistBarber}
+          date={formatDate(allAppointmentsDate)}
+          entries={allWaitlist.filter(w => w.barber_id === waitlistBarber.id)}
+          onClose={() => setWaitlistBarber(null)}
+          onChanged={() => loadAllAppointments(allAppointmentsDate)}
+        />
       )}
 
       {/* Blocked Slot Modal - for slots marked as booked but without appointment data */}

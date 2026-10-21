@@ -12,6 +12,13 @@ import { withTimeout } from '@/lib/timeout';
 const MIN_DIGITS = 9;
 const digitsOf = (p) => (p || '').replace(/\D/g, '');
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec'];
+const fmtDate = (iso) => {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d}. ${MONTHS[m - 1]} ${y}.`;
+};
+
 const splitName = (full) => {
   const parts = (full || '').trim().split(/\s+/).filter(Boolean);
   return { firstName: parts[0] || '', lastName: parts.slice(1).join(' ') };
@@ -27,6 +34,50 @@ export default function ClientFields({ supabase, value, onChange, inputClass, or
 
   const cls = inputClass || 'w-full bg-black border border-zinc-700 rounded-lg px-3 py-2.5 text-white';
   const set = (field, v) => onChange({ ...valueRef.current, [field]: v });
+
+  // Predlozi dok se kuca ime: svi klijenti sa tim imenom, najcesci prvi.
+  // Predjite misem (ili strelicama) preko imena za ostale podatke, klik popunjava formu.
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSug, setShowSug] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const nameTyped = useRef(false);
+  const setName = (field, v) => { nameTyped.current = true; set(field, v); };
+
+  useEffect(() => {
+    if (!nameTyped.current) return;
+    const q = `${value.firstName || ''} ${value.lastName || ''}`.trim();
+    if (q.length < 2) { setSuggestions([]); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const { data, error } = await withTimeout(() => supabase.rpc('search_clients', { p_query: q, p_limit: 8 }));
+      if (cancelled || error) return;
+      setSuggestions(data || []);
+      setActiveIdx(0);
+      setShowSug(true);
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [value.firstName, value.lastName]);
+
+  const pickSuggestion = (c) => {
+    const { firstName, lastName } = splitName(c.customer_name);
+    // Zajednicki broj (npr. berberov) se ne upisuje kao broj klijenta
+    const phone = c.shared_phone ? valueRef.current.phone : (c.customer_phone || '');
+    const next = { ...valueRef.current, firstName, lastName, phone, email: c.customer_email || valueRef.current.email || '' };
+    autoFilled.current = { firstName: next.firstName, lastName: next.lastName, email: next.email };
+    nameTyped.current = false;
+    setShowSug(false);
+    setSuggestions([]);
+    onChange(next);
+  };
+
+  const onNameKeyDown = (e) => {
+    if (!showSug || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); pickSuggestion(suggestions[activeIdx]); }
+    else if (e.key === 'Escape') { setShowSug(false); }
+  };
+  const hideSoon = () => setTimeout(() => setShowSug(false), 150);
 
   useEffect(() => {
     const phone = value.phone;
@@ -100,17 +151,60 @@ export default function ClientFields({ supabase, value, onChange, inputClass, or
           {lookup?.found && lookup.blacklisted && <span className="text-red-400"> · NA CRNOJ LISTI</span>}
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-white/50 text-xs mb-1">Ime *</label>
-          <input type="text" value={value.firstName} onChange={(e) => set('firstName', e.target.value)}
-            className={cls} placeholder="Ime" required />
+      <div className="relative">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-white/50 text-xs mb-1">Ime *</label>
+            <input type="text" value={value.firstName} onChange={(e) => setName('firstName', e.target.value)}
+              onKeyDown={onNameKeyDown} onBlur={hideSoon} onFocus={() => suggestions.length && setShowSug(true)}
+              className={cls} placeholder="Ime" required autoComplete="off" />
+          </div>
+          <div>
+            <label className="block text-white/50 text-xs mb-1">Prezime *</label>
+            <input type="text" value={value.lastName} onChange={(e) => setName('lastName', e.target.value)}
+              onKeyDown={onNameKeyDown} onBlur={hideSoon} onFocus={() => suggestions.length && setShowSug(true)}
+              className={cls} placeholder="Prezime" required autoComplete="off" />
+          </div>
         </div>
-        <div>
-          <label className="block text-white/50 text-xs mb-1">Prezime *</label>
-          <input type="text" value={value.lastName} onChange={(e) => set('lastName', e.target.value)}
-            className={cls} placeholder="Prezime" required />
-        </div>
+
+        {showSug && suggestions.length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-zinc-800 border border-white/15 rounded-lg shadow-2xl overflow-hidden">
+            <p className="px-3 pt-2 pb-1 text-[10px] tracking-wider text-white/40">KLIJENTI U BAZI · klik popunjava formu</p>
+            <div className="max-h-72 overflow-y-auto">
+              {suggestions.map((c, i) => {
+                const active = i === activeIdx;
+                return (
+                  <button
+                    key={c.client_key}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); pickSuggestion(c); }}
+                    onMouseEnter={() => setActiveIdx(i)}
+                    className={`w-full text-left px-3 py-2 border-t border-white/5 ${active ? 'bg-white/10' : ''}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-white truncate">
+                        {c.customer_name}
+                        {c.blacklisted && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-red-500/25 text-red-300">CRNA LISTA</span>}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-green-400">{c.visits} {c.visits === 1 ? 'dolazak' : 'dolazaka'}</span>
+                    </div>
+                    {/* Ostali podaci se vide za ime preko kog je mis (ili izabrano strelicama) */}
+                    {active ? (
+                      <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-white/60">
+                        <span>Tel: {c.shared_phone ? <span className="text-yellow-300/80">broj berbera, upišite broj klijenta</span> : (c.customer_phone || '-')}</span>
+                        <span className="truncate">Email: {c.customer_email || '-'}</span>
+                        <span>Poslednji put: {c.last_visit ? fmtDate(c.last_visit) : '-'}</span>
+                        <span className={c.no_shows ? 'text-red-400' : ''}>Nije došao: {c.no_shows}x</span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-white/35 truncate">{c.shared_phone ? '' : c.customer_phone}</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
       <div>
         <label className="block text-white/50 text-xs mb-1">Email (opciono, šalje se potvrda)</label>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { cldUrl, optimizeImageUrl, TRANSFORMS } from '@/lib/cloudinary'
 import { DESKTOP_HERO_IMAGES, MOBILE_HERO_IMAGES, getBackgroundImageUrl } from '@/lib/backgrounds'
+import WaitlistForm from './WaitlistForm'
 
 // Slike se serviraju sa Cloudinary-ja (folder tension-barber), optimizovane po velicini i formatu
 const stripExt = (file) => file.replace(/\.[a-z0-9]+$/i, '')
@@ -61,6 +62,9 @@ export default function Home() {
   const [selectedAddons, setSelectedAddons] = useState([])
   const [isMobile, setIsMobile] = useState(false)
   const [showNoNextSlotWarning, setShowNoNextSlotWarning] = useState(false)
+  const [waitlistFor, setWaitlistFor] = useState(null) // berber za koga se klijent prijavljuje na listu cekanja
+  const [deepLink, setDeepLink] = useState(null)       // { b, d, t } iz linka u mejlu liste cekanja
+  const [deepLinkMsg, setDeepLinkMsg] = useState('')
   
   // Dynamic data from database
   const [salons, setSalons] = useState([])
@@ -279,6 +283,43 @@ export default function Home() {
     const timer = setTimeout(hidePreloader, 2500)
     return () => clearTimeout(timer)
   }, [])
+
+  // Link iz mejla liste cekanja (?b=berber&d=datum&t=vreme): otvara tog berbera, dan i vreme
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const b = params.get('b'), d = params.get('d'), t = params.get('t')
+    if (b && d && t) setDeepLink({ b, d, t })
+  }, [])
+
+  const localIso = (dt) => `${dt.year}-${String(dt.month).padStart(2, '0')}-${String(dt.dayNum).padStart(2, '0')}`
+
+  useEffect(() => {
+    if (!deepLink || salons.length === 0 || deepLink.stage) return
+    const salon = salons.find(s => s.barbers.some(br => br.id === deepLink.b))
+    const date = dates.find(dt => localIso(dt) === deepLink.d || dt.iso === deepLink.d)
+    if (!salon || !date) { setDeepLink(null); return }
+    setSelectedSalon(salon)
+    setSelectedDate(date)
+    setDeepLink({ ...deepLink, stage: 'waiting-slots' })
+  }, [deepLink, salons])
+
+  useEffect(() => {
+    // Prvo se saceka da pocne pa da se zavrsi ucitavanje termina za taj dan
+    if (deepLink?.stage === 'waiting-slots' && loadingSlots) { setDeepLink({ ...deepLink, stage: 'loading' }); return }
+    if (deepLink?.stage !== 'loading' || !selectedDate || loadingSlots) return
+    const barber = selectedSalon?.barbers.find(br => br.id === deepLink.b)
+    const free = availableSlots[deepLink.b] || []
+    window.history.replaceState({}, '', window.location.pathname)
+    setDeepLink(null)
+    if (barber && free.includes(deepLink.t)) {
+      setSelectedBarber(barber)
+      setSelectedTime(deepLink.t)
+      setShowForm(true)
+    } else {
+      setDeepLinkMsg(`Termin u ${deepLink.t} je u međuvremenu zauzet. Izaberite drugo vreme ili se ponovo prijavite na listu čekanja.`)
+      setTimeout(() => scrollToSection('barber-section'), 300)
+    }
+  }, [deepLink, selectedDate, loadingSlots, availableSlots])
 
   // Load saved customer data from localStorage on mount
   useEffect(() => {
@@ -707,6 +748,12 @@ export default function Home() {
           <div className="max-w-5xl mx-auto">
             <h2 className="text-xl md:text-2xl font-light tracking-[0.2em] mb-2">IZABERI BERBERA I TERMIN</h2>
             <p className="text-gray-500 text-sm mb-12">{selectedDate.day}, {selectedDate.formatted}</p>
+            {deepLinkMsg && (
+              <div className="-mt-8 mb-8 p-3 rounded bg-orange-500/15 border border-orange-500/30 text-orange-200 text-sm flex justify-between gap-3">
+                <span>{deepLinkMsg}</span>
+                <button onClick={() => setDeepLinkMsg('')} className="text-orange-200/70">×</button>
+              </div>
+            )}
             
             {loadingSlots ? (
               <div className="text-center py-12">
@@ -753,6 +800,14 @@ export default function Home() {
                             ))}
                           </div>
                         )}
+                        <button
+                          onClick={() => setWaitlistFor(barber)}
+                          className={`mt-3 w-full py-2 rounded text-xs transition ${timeSlots.length === 0
+                            ? 'bg-white text-black font-semibold hover:bg-gray-200'
+                            : 'border border-zinc-700 text-gray-400 hover:text-white hover:border-white'}`}
+                        >
+                          Javi mi ako se oslobodi termin
+                        </button>
                       </div>
                     </div>
                   )
@@ -881,6 +936,10 @@ export default function Home() {
           </a>
         </p>
       </footer>
+
+      {waitlistFor && selectedDate && (
+        <WaitlistForm barber={waitlistFor} date={selectedDate} initial={form} onClose={() => setWaitlistFor(null)} />
+      )}
 
       {/* ==================== BOOKING MODAL ==================== */}
       {showForm && (
