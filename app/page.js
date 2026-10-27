@@ -169,7 +169,7 @@ export default function Home() {
         const isLoc1 = loc.name.includes('Petra')
         const locationBarbers = barbers
           .filter(b => b.location_id === loc.id && b.is_active !== false)
-          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0) || a.name.localeCompare(b.name))
           .map(b => ({
             id: b.id,
             name: b.name,

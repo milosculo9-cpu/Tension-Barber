@@ -479,7 +479,8 @@ export default function Dashboard() {
 
   const loadAllBarbers = async () => {
     // Deaktivirani berberi (bivsi radnici sa sacuvanom istorijom termina) se ne prikazuju
-    const { data } = await supabase.from('barbers').select('*, locations(name)').neq('is_active', false).order('display_order');
+    const { data } = await supabase.from('barbers').select('*, locations(name)').neq('is_active', false)
+      .order('display_order').order('name');
     if (data) setAllBarbers(data);
   };
 
@@ -1363,6 +1364,13 @@ export default function Dashboard() {
         return;
       }
       
+      // Novi berber ide na kraj liste svog lokala (i na sajtu)
+      if (result.barber?.id && newBarberLocation) {
+        await supabase.from('barbers')
+          .update({ display_order: nextDisplayOrder(newBarberLocation, result.barber.id) })
+          .eq('id', result.barber.id);
+      }
+
       // Ako je izabrana slika, salje se na Cloudinary i link se upisuje u bazu
       if (newBarberImage && result.barber?.id) {
         try {
@@ -1455,6 +1463,35 @@ export default function Dashboard() {
 
   const shortLocationName = (loc) => (loc?.name?.includes('Petra') ? 'Lokal I' : 'Lokal II');
 
+  // Redosled berbera po lokalu: isti redosled se prikazuje na sajtu
+  const barbersOfLocation = (locationId) => allBarbers
+    .filter(b => b.location_id === locationId)
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0) || a.name.localeCompare(b.name));
+  const nextDisplayOrder = (locationId, exceptId) =>
+    Math.max(0, ...allBarbers.filter(b => b.location_id === locationId && b.id !== exceptId).map(b => b.display_order || 0)) + 1;
+  const [reorderingId, setReorderingId] = useState(null);
+
+  const moveBarberInOrder = async (b, dir) => {
+    const list = barbersOfLocation(b.location_id);
+    const i = list.findIndex(x => x.id === b.id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    // Svima u lokalu se upisuje redni broj 1, 2, 3... (stari podaci imaju iste brojeve)
+    const changes = list.map((x, idx) => ({ id: x.id, display_order: idx + 1 })).filter((c, idx) => list[idx].display_order !== c.display_order);
+    setReorderingId(b.id);
+    setAllBarbers(prev => prev.map(x => {
+      const c = changes.find(c => c.id === x.id);
+      return c ? { ...x, display_order: c.display_order } : x;
+    }));
+    const results = await Promise.all(changes.map(c =>
+      supabase.from('barbers').update({ display_order: c.display_order }).eq('id', c.id)));
+    setReorderingId(null);
+    const failed = results.find(r => r.error);
+    if (failed) alert(`Promena redosleda nije uspela: ${failed.error.message}`);
+    loadAllBarbers();
+  };
+
   const moveBarberToOtherLocation = async (b) => {
     const target = locations.find(l => l.id !== b.location_id);
     if (!target) return;
@@ -1463,7 +1500,7 @@ export default function Dashboard() {
     setMovingBarberId(b.id);
     const { error } = await supabase
       .from('barbers')
-      .update({ location_id: target.id })
+      .update({ location_id: target.id, display_order: nextDisplayOrder(target.id, b.id) })
       .eq('id', b.id);
     setMovingBarberId(null);
 
@@ -1480,7 +1517,7 @@ export default function Dashboard() {
     setSavingLocation(true);
     const { error } = await supabase
       .from('barbers')
-      .update({ location_id: locationId })
+      .update({ location_id: locationId, display_order: nextDisplayOrder(locationId, editingBarber.id) })
       .eq('id', editingBarber.id);
     setSavingLocation(false);
 
@@ -2351,12 +2388,38 @@ export default function Dashboard() {
                         + DODAJ
                       </button>
                     </div>
-                    <div className="space-y-2">
-                      {allBarbers.map(b => (
+                    <p className="text-white/40 text-xs mb-4">
+                      Strelicama ↑ ↓ menjate redosled berbera u lokalu. Istim redom se prikazuju na sajtu.
+                    </p>
+                    <div className="space-y-6">
+                      {[...locations.map(l => ({ key: l.id, title: `${shortLocationName(l)} · ${l.name}`, list: barbersOfLocation(l.id) })),
+                        { key: 'pult', title: 'Pult', list: allBarbers.filter(b => !b.location_id) }]
+                        .filter(g => g.list.length > 0)
+                        .map(({ key, title, list }) => (
+                        <div key={key}>
+                          <h3 className="text-white/50 text-xs tracking-wider mb-2">{title.toUpperCase()}</h3>
+                          <div className="space-y-2">
+                            {list.map((b, idx) => (
                         <div
                           key={b.id}
-                          className="w-full bg-white/5 rounded-lg p-4 flex justify-between items-center gap-3"
+                          className="w-full bg-white/5 rounded-lg p-3 sm:p-4 flex justify-between items-center gap-2 sm:gap-3"
                         >
+                          {b.location_id && (
+                            <div className="flex flex-col gap-1 shrink-0">
+                              <button
+                                onClick={() => moveBarberInOrder(b, -1)}
+                                disabled={idx === 0 || !!reorderingId}
+                                aria-label="Pomeri gore"
+                                className="w-8 h-7 rounded bg-white/10 text-sm disabled:opacity-20"
+                              >↑</button>
+                              <button
+                                onClick={() => moveBarberInOrder(b, 1)}
+                                disabled={idx === list.length - 1 || !!reorderingId}
+                                aria-label="Pomeri dole"
+                                className="w-8 h-7 rounded bg-white/10 text-sm disabled:opacity-20"
+                              >↓</button>
+                            </div>
+                          )}
                           <button
                             onClick={() => setEditingBarber(b)}
                             className="flex items-center gap-3 flex-1 text-left"
@@ -2390,6 +2453,9 @@ export default function Dashboard() {
                                 : `→ ${shortLocationName(locations.find(l => l.id !== b.location_id)).toUpperCase()}`}
                             </button>
                           )}
+                        </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
